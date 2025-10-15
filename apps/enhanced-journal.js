@@ -224,6 +224,28 @@ export class EnhancedJournal extends Application {
             elem?.remove();
         }
 
+        // v13: Restore folder expansion state from stored flags
+        const allFolders = section.querySelectorAll('.folder[data-folder-id]');
+        for (let folderEl of allFolders) {
+            const folderId = folderEl.dataset.folderId;
+            const folderDoc = game.journal.folders.get(folderId);
+            if (folderDoc) {
+                // Check stored expansion state
+                // If no flag exists, use Foundry's built-in expanded property, defaulting to true
+                let isExpanded = folderDoc.getFlag("monks-enhanced-journal", "expanded");
+                if (isExpanded === undefined || isExpanded === null) {
+                    // Try to use Foundry's built-in expanded property
+                    isExpanded = folderDoc.expanded ?? true;
+                }
+                
+                if (isExpanded) {
+                    folderEl.classList.add("expanded");
+                } else {
+                    folderEl.classList.remove("expanded");
+                }
+            }
+        }
+
         // Downstream helpers expect a jQuery-wrapped element; wrap minimally for compatibility
         const $section = $(section);
         this.activateDirectoryListeners($section);
@@ -502,6 +524,18 @@ export class EnhancedJournal extends Application {
             this.object._sheet = null;  // Adding this to prevent Quick Encounters from automatically opening
 
             if (!["blank", "folder"].includes(this.object.type)) {
+                // Ensure sheet.document has pages property for compatibility with other modules
+                // Some modules expect sheet.document.pages to exist when renderJournalSheet hook is called
+                if (this.subsheet.document && !this.subsheet.document.pages) {
+                    // If document is a JournalEntryPage, get pages from parent JournalEntry
+                    if (this.subsheet.object instanceof JournalEntryPage && this.subsheet.object.parent) {
+                        this.subsheet.document.pages = this.subsheet.object.parent.pages;
+                    }
+                    // Fallback: create empty pages collection to prevent errors in other modules
+                    else if (!this.subsheet.document.pages) {
+                        this.subsheet.document.pages = new foundry.utils.Collection();
+                    }
+                }
                 Hooks.callAll('renderJournalSheet', this.subsheet, contentform, templateData); //this.object);
                 if (this.object._source.type == "text")
                     Hooks.callAll('renderJournalTextPageSheet', this.subsheet, contentform, templateData);
@@ -1742,10 +1776,23 @@ export class EnhancedJournal extends Application {
         });
         
         // v13: _toggleFolder may not exist, implement locally
-        directory.on("click", ".folder-header", (event) => {
+        directory.on("click", ".folder-header", async (event) => {
             event.preventDefault();
-            const folder = event.currentTarget.closest(".folder");
-            if (folder) folder.classList.toggle("collapsed");
+            event.stopPropagation();
+            
+            const folderEl = event.currentTarget.closest(".folder");
+            if (!folderEl) return;
+            
+            const folderId = folderEl.dataset.folderId;
+            const folderDoc = game.journal.folders.get(folderId);
+            if (!folderDoc) return;
+            
+            // Toggle the expanded class immediately for UI responsiveness
+            folderEl.classList.toggle("expanded");
+            
+            // Update the folder's expanded state in v13
+            const isExpanded = folderEl.classList.contains("expanded");
+            await folderDoc.update({ "flags.monks-enhanced-journal.expanded": isExpanded });
         });
         
         // v13: Drag highlight functionality

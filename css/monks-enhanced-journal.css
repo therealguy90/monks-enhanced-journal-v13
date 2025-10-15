@@ -704,6 +704,19 @@
     color: var(--mej-sidebar-folder-context-color);
 }
 
+.monks-enhanced-journal .directory li.folder:not(.expanded) > .subdirectory {
+    display: none;
+}
+
+/* Change folder icon based on expanded state */
+.monks-enhanced-journal .directory li.folder:not(.expanded) > .folder-header h3 i.fa-folder-open::before {
+    content: "\f07b"; /* fa-folder (closed) */
+}
+
+.monks-enhanced-journal .directory li.folder.expanded > .folder-header h3 i.fa-folder-open::before {
+    content: "\f07c"; /* fa-folder-open */
+}
+
 .monks-enhanced-journal .directory .subdirectory {
     border-left: 4px solid var(--mej-sidebar-subfolder-border);
     border-bottom: 4px solid var(--mej-sidebar-subfolder-border);
