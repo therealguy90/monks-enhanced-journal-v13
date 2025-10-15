@@ -1,4 +1,4 @@
-**NOTE: This fork has many of the aspects of the module fixed for v13 using AI (as I only needed a quick fix). USE AT YOUR OWN RISK.**
+# **NOTE: This fork has many of the aspects of the module fixed for v13 using AI (as I only needed a quick fix). USE AT YOUR OWN RISK.**
 
 **If you are having problems running Enhanced Journals in v9 and get an error `Cannot set property type of #<JournalEntryData> which has only a getter` please deselect Lib: Document Sheet Registrar as it is causing issues.**
 
