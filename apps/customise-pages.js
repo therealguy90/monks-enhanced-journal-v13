@@ -1,9 +1,10 @@
 import { MonksEnhancedJournal, log, setting, i18n, makeid } from '../monks-enhanced-journal.js';
 
-export class CustomisePages extends FormApplication {
+export class CustomisePages extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
 
-    constructor(object, options) {
-        super(object, options);
+    constructor(object, options = {}) {
+        super(options);
+        this.object = object;
 
         this.sheetSettings = {};
         let types = MonksEnhancedJournal.getDocumentTypes();
@@ -17,46 +18,66 @@ export class CustomisePages extends FormApplication {
             }
         }
     }
+
     get activeCategory() {
-        return this._tabs[0].active;
+        return this._tabs?.[0]?.active;
     }
 
     static get typeList() {
         return ["encounter", "event", "organization", "person", "picture", "place", "poi", "quest", "shop"];
     }
-    static get defaultOptions() {
-        let tabs = [{ navSelector: ".page-tabs", contentSelector: ".categories > div", initial: "encounter" }];
-        for (let page of CustomisePages.typeList) {
-            tabs.push({ navSelector: `.${page}-tabs`, contentSelector: `.${page}-body`, initial: "tabs" });
-        }
 
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "customise-pages",
-            classes: ["form"],
-            title: "Customise Pages",
-            template: "modules/monks-enhanced-journal/templates/customise/customise-pages.html",
-            tabs,
+    static DEFAULT_OPTIONS = {
+        id: "customise-pages",
+        classes: [],
+        tag: "form",
+        form: {
+            handler: CustomisePages.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
             width: 800,
+            height: "auto"
+        },
+        window: {
+            title: "Customise Pages",
             resizable: true,
-            scrollY: [".sidebar .tabs", ".item-list"],
-            dragDrop: [{ dragSelector: ".reorder-attribute", dropSelector: ".item-list" }]
-        });
+            contentClasses: ["standard-form"]
+        },
+        actions: {
+            "reset-all": CustomisePages.onResetDefaults,
+            "delete-attribute": CustomisePages.removeAttribute,
+            "add-attribute": CustomisePages.addAttribute
+        }
+    };
+
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/customise/customise-pages.hbs",
+            scrollable: [".sidebar .tabs", ".item-list"]
+        }
+    };
+
+    get dragDrop() {
+        return [{ dragSelector: ".reorder-attribute", dropSelector: ".item-list" }];
     }
 
-    async _renderInner(...args) {
+    async _preparePartContext(partId, context, options) {
+        context = await super._preparePartContext(partId, context, options);
+
+        // Load sub-templates for each page type
         let load_templates = {};
         for (let page of CustomisePages.typeList) {
-            let template = `modules/monks-enhanced-journal/templates/customise/${page}.html`;
+            let template = `modules/monks-enhanced-journal/templates/customise/${page}.hbs`;
             load_templates[page] = template;
-            delete Handlebars.partials[template];
         }
         await loadTemplates(load_templates);
-        const html = await super._renderInner(...args);
-        return html;
+
+        return context;
     }
 
-    getData(options) {
-        let data = super.getData(options);
+    _prepareContext(options) {
+        let data = super._prepareContext(options);
         data.generalEdit = true;
         data.sheetSettings = foundry.utils.duplicate(this.sheetSettings);
 
@@ -67,23 +88,64 @@ export class CustomisePages extends FormApplication {
         return data;
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _onRender(context, options) {
+        super._onRender(context, options);
 
-        html.find("button.reset-all").click(this._onResetDefaults.bind(this));
+        const inputs = this.element.querySelectorAll('input[name]');
+        inputs.forEach(input => {
+            input.addEventListener('change', this.changeData.bind(this));
+        });
 
-        $('input[name]', html).change(this.changeData.bind(this));
-
-        $('.item-delete-attribute', html).click(this.removeAttribute.bind(this));
-        $('.item-add-attribute', html).click(this.addAttribute.bind(this));
-    };
-
-    get currentType() {
-        return this._tabs[0].active;
+        // Set up tabs manually since ApplicationV2 doesn't have built-in tab support like FormApplication
+        this._setupTabs();
     }
 
-    addAttribute(event) {
-        let attribute = event.currentTarget.dataset.attribute;
+    _setupTabs() {
+        // Initialize tabs for the main page navigation
+        const mainTabs = this.element.querySelectorAll('.page-tabs [data-tab]');
+        const mainContents = this.element.querySelectorAll('.categories > div[data-tab]');
+        
+        mainTabs.forEach(tab => {
+            tab.addEventListener('click', (event) => {
+                event.preventDefault();
+                const targetTab = tab.dataset.tab;
+                
+                mainTabs.forEach(t => t.classList.remove('active'));
+                mainContents.forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                const targetContent = this.element.querySelector(`.categories > div[data-tab="${targetTab}"]`);
+                if (targetContent) targetContent.classList.add('active');
+            });
+        });
+
+        // Initialize tabs for each page type
+        for (let page of CustomisePages.typeList) {
+            const pageTabs = this.element.querySelectorAll(`.${page}-tabs [data-tab]`);
+            const pageContents = this.element.querySelectorAll(`.${page}-body > div[data-tab]`);
+            
+            pageTabs.forEach(tab => {
+                tab.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const targetTab = tab.dataset.tab;
+                    
+                    pageTabs.forEach(t => t.classList.remove('active'));
+                    pageContents.forEach(c => c.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    const targetContent = this.element.querySelector(`.${page}-body > div[data-tab="${targetTab}"]`);
+                    if (targetContent) targetContent.classList.add('active');
+                });
+            });
+        }
+    }
+
+    get currentType() {
+        return this._tabs?.[0]?.active;
+    }
+
+    static addAttribute(event, target) {
+        let attribute = target.dataset.attribute;
         let attributes = foundry.utils.getProperty(this, attribute);
 
         if (!attributes) return;
@@ -100,29 +162,29 @@ export class CustomisePages extends FormApplication {
     }
 
     changeData(event) {
-        let prop = $(event.currentTarget).attr("name");
+        let prop = event.currentTarget.getAttribute("name");
         if (foundry.utils.hasProperty(this, prop)) {
-            let val = $(event.currentTarget).attr("type") == "checkbox" ? $(event.currentTarget).prop('checked') : $(event.currentTarget).val();
+            let val = event.currentTarget.type == "checkbox" ? event.currentTarget.checked : event.currentTarget.value;
             foundry.utils.setProperty(this, prop, val);
         }
     }
 
-    removeAttribute(event) {
-        let key = event.currentTarget.closest('li.item').dataset.id;
+    static removeAttribute(event, target) {
+        let key = target.closest('li.item').dataset.id;
 
-        let target = this;
+        let obj = this;
         let parts = key.split('.');
         for (let i = 0; i < parts.length; i++) {
             let p = parts[i];
-            const t = getType(target);
+            const t = getType(obj);
             if (!((t === "Object") || (t === "Array"))) break;
             if (i === parts.length - 1) {
-                delete target[p];
+                delete obj[p];
                 break;
             }
-            if (p in target) target = target[p];
+            if (p in obj) obj = obj[p];
             else {
-                target = undefined;
+                obj = undefined;
                 break;
             }
         }
@@ -164,30 +226,31 @@ export class CustomisePages extends FormApplication {
             let to = (foundry.utils.getProperty(this, target.dataset.id) || {}).order ?? 0;
             log('from', from, 'to', to);
 
+            const draggedElement = this.element.querySelector(`.item-list .item[data-id="${data.id}"]`);
             if (from < to) {
                 for (let attr of Object.values(attributes)) {
                     if (attr.order > from && attr.order <= to) {
                         attr.order--;
                     }
                 }
-                $('.item-list .item[data-id="' + data.id + '"]', this.element).insertAfter(target);
+                target.after(draggedElement);
             } else {
                 for (let attr of Object.values(attributes)) {
                     if (attr.order < from && attr.order >= to) {
                         attr.order++;
                     }
                 }
-                $('.item-list .item[data-id="' + data.id + '"]', this.element).insertBefore(target);
+                target.before(draggedElement);
             }
             (foundry.utils.getProperty(this, data.id) || {}).order = to;
         }
     }
 
-    _updateObject(event, formData) {
-        game.settings.set("monks-enhanced-journal", "sheet-settings", this.sheetSettings, { diff: false });
+    static async #onSubmit(event, form, formData) {
+        await game.settings.set("monks-enhanced-journal", "sheet-settings", this.sheetSettings, { diff: false });
     }
 
-    async _onResetDefaults(event) {
+    static async onResetDefaults(event, target) {
         let sheetSettings = game.settings.settings.get("monks-enhanced-journal.sheet-settings");
         await game.settings.set("monks-enhanced-journal", "sheet-settings", sheetSettings.default);
         this.sheetSettings = sheetSettings.default;

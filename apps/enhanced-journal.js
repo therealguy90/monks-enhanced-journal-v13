@@ -2,6 +2,14 @@ import { MonksEnhancedJournal, log, i18n, error, setting, getVolume, makeid  } f
 import { EnhancedJournalSheet } from "../sheets/EnhancedJournalSheet.js"
 import { JournalEntrySheet } from "../sheets/JournalEntrySheet.js"
 
+// V13 Namespaced class references
+const ActorSheetImpl = foundry.appv1.sheets.ActorSheet || ActorSheet;
+const DragDropImpl = foundry.applications.ux.DragDrop?.implementation || DragDrop;
+const ContextMenuImpl = foundry.applications.ux.ContextMenu?.implementation || ContextMenu;
+const JournalSheetImpl = foundry.appv1.sheets.JournalSheet || JournalSheet;
+const loadTemplatesImpl = foundry.applications.handlebars.loadTemplates || loadTemplates;
+const SearchFilterImpl = foundry.applications.ux.SearchFilter || SearchFilter;
+
 export class EnhancedJournal extends Application {
     tabs = [];
     bookmarks = [];
@@ -74,15 +82,16 @@ export class EnhancedJournal extends Application {
     }
 
     get entryType() {
-        return ui.journal.collection.documentName;
+        return ui.journal?.collection?.documentName || "JournalEntry";
     }
 
     get _onCreateDocument() {
-        return ui.journal._onCreateDocument;
+        // v13: This method may not exist, provide fallback
+        return ui.journal?._onCreateDocument || this._onCreateEntry?.bind(this);
     }
 
     get collection() {
-        return ui.journal.collection;
+        return ui.journal?.collection || game.journal;
     }
 
     get isEditable() {
@@ -160,16 +169,21 @@ export class EnhancedJournal extends Application {
         const cfg = CONFIG["JournalEntry"];
         const cls = cfg.documentClass;
         let template = "modules/monks-enhanced-journal/templates/directory.html";
+        
+        // v13: Access ui.journal properties safely with fallbacks
+        const journal = ui.journal;
+        const collection = journal?.collection || game.journal;
+        
         let data = {
-            tree: ui.journal.collection.tree,
-            entryPartial: ui.journal.constructor.entryPartial,
-            folderPartial: ui.journal.constructor.folderPartial,
-            canCreateEntry: ui.journal.canCreateEntry,
-            canCreateFolder: ui.journal.canCreateFolder,
-            sortIcon: ui.journal.collection.sortingMode === "a" ? "fa-arrow-down-a-z" : "fa-arrow-down-short-wide",
-            sortTooltip: ui.journal.collection.sortingMode === "a" ? "SIDEBAR.SortModeAlpha" : "SIDEBAR.SortModeManual",
-            searchIcon: ui.journal.collection.searchMode === CONST.DIRECTORY_SEARCH_MODES.NAME ? "fa-search" : "fa-file-magnifying-glass",
-            searchTooltip: ui.journal.collection.searchMode === CONST.DIRECTORY_SEARCH_MODES.NAME ? "SIDEBAR.SearchModeName" : "SIDEBAR.SearchModeFull",
+            tree: collection.tree,
+            entryPartial: journal?.constructor?.entryPartial || "templates/sidebar/partials/journal-partial.html",
+            folderPartial: journal?.constructor?.folderPartial || "templates/sidebar/partials/folder-partial.html",
+            canCreateEntry: journal?.canCreateEntry ?? game.user.can("JOURNAL_CREATE"),
+            canCreateFolder: journal?.canCreateFolder ?? game.user.can("FOLDER_CREATE"),
+            sortIcon: collection.sortingMode === "a" ? "fa-arrow-down-a-z" : "fa-arrow-down-short-wide",
+            sortTooltip: collection.sortingMode === "a" ? "SIDEBAR.SortModeAlpha" : "SIDEBAR.SortModeManual",
+            searchIcon: collection.searchMode === CONST.DIRECTORY_SEARCH_MODES.NAME ? "fa-search" : "fa-file-magnifying-glass",
+            searchTooltip: collection.searchMode === CONST.DIRECTORY_SEARCH_MODES.NAME ? "SIDEBAR.SearchModeName" : "SIDEBAR.SearchModeFull",
             documentCls: cls.documentName.toLowerCase(),
             tabName: cls.metadata.collection,
             sidebarIcon: cfg.sidebarIcon,
@@ -180,35 +194,47 @@ export class EnhancedJournal extends Application {
             unavailable: game.user.isGM ? cfg.collection?.instance?.invalidDocumentIds?.size : 0
         };
 
-        let html = await renderTemplate(template, data);
-        html = $(html);
+        // Render the template to HTML and build a DOM tree without jQuery
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        const htmlString = await renderTemplateImpl(template, data);
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = htmlString.trim();
+        const section = wrapper.firstElementChild; // <section class="directory ...">
 
-        $('.directory-sidebar', this.element).empty().append(html);
-
-        //if (game.modules.get("forien-quest-log")?.active && !game.settings.get("forien-quest-log", 'showFolder')) {
-        let folder = game.journal.directory.folders.find(f => (f.name == '_fql_quests' && f.parent == null));
-        if (folder) {
-            let elem = html.find(`.folder[data-folder-id="${folder.id}"]`);
-            elem.remove();
-        }
-        //}
-
-        folder = game.journal.directory.folders.find(f => (f.name == '_simple_calendar_notes_directory' && f.parent == null));
-        if (folder) {
-            let elem = html.find(`.folder[data-folder-id="${folder.id}"]`);
-            elem.remove();
+        // Insert into the sidebar container using native DOM
+        const root = this.element instanceof jQuery ? this.element[0] : this.element;
+        const sidebar = root?.querySelector?.('.directory-sidebar');
+        if (sidebar) {
+            // Clear and append
+            sidebar.replaceChildren(section);
         }
 
-        this.activateDirectoryListeners(html);
+        // Remove special folders if present
+        // if (game.modules.get("forien-quest-log")?.active && !game.settings.get("forien-quest-log", 'showFolder')) {
+        let folder = game.journal.folders.find(f => (f.name == '_fql_quests' && f.parent == null));
+        if (folder) {
+            const elem = section.querySelector(`.folder[data-folder-id="${folder.id}"]`);
+            elem?.remove();
+        }
+        // }
 
-        this._restoreScrollPositions(html);
+        folder = game.journal.folders.find(f => (f.name == '_simple_calendar_notes_directory' && f.parent == null));
+        if (folder) {
+            const elem = section.querySelector(`.folder[data-folder-id="${folder.id}"]`);
+            elem?.remove();
+        }
 
-        return html;
+        // Downstream helpers expect a jQuery-wrapped element; wrap minimally for compatibility
+        const $section = $(section);
+        this.activateDirectoryListeners($section);
+        this._restoreScrollPositions($section);
+
+        return $section;
     }
 
     async renderSubSheet(force, options = {}) {
         try {
-            const modes = JournalSheet.VIEW_MODES;
+            const modes = JournalSheetImpl.VIEW_MODES;
 
             let currentTab = this.tabs.active();
             if (!currentTab) {
@@ -338,14 +364,15 @@ export class EnhancedJournal extends Application {
             }
 
             //let defaultOptions = this.subsheet.constructor.defaultOptions;
-            await loadTemplates({
+            await loadTemplatesImpl({
                 journalEntryPageHeader: "templates/journal/parts/page-header.html",
                 journalEntryPageFooter: "templates/journal/parts/page-footer.html"
             });
             if (this.subsheet.sheetTemplates) {
-                await loadTemplates(this.subsheet.sheetTemplates);
+                await loadTemplatesImpl(this.subsheet.sheetTemplates);
             }
-            let html = await renderTemplate(this.subsheet.template, templateData);
+            const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+            let html = await renderTemplateImpl(this.subsheet.template, templateData);
 
             this.subdocument = $(html).get(0);
             this.subsheet.form = (this.subdocument.tagName == 'FORM' ? this.subdocument : $('form:first', this.subdocument).get(0));
@@ -389,7 +416,7 @@ export class EnhancedJournal extends Application {
             let classes = this.subsheet.options.classes.join(' ').replace('monks-enhanced-journal', '');
             if (game.system.id == "pf2e")
                 classes += " journal-page-content";
-            if (!(this.subsheet instanceof ActorSheet)) {
+            if (!(this.subsheet instanceof ActorSheetImpl)) {
                 if (!setting("use-system-tag"))
                     classes = classes.replace(game.system.id, '');
             }
@@ -410,9 +437,10 @@ export class EnhancedJournal extends Application {
             }
 
             //connect the tabs to the enhanced journal so that opening the regular document won't try and change tabs on the other window.
+            const TabsImpl = foundry.applications.ux.Tabs;
             this._tabs = this.subsheet.options.tabs.map(t => {
                 t.callback = this.subsheet._onChangeTab.bind(this);
-                return new Tabs(t);
+                return new TabsImpl(t);
             });
             this._tabs.forEach(t => t.bind(this.subdocument));
 
@@ -431,7 +459,7 @@ export class EnhancedJournal extends Application {
                     dragover: this._onDragOver.bind(this),
                     drop: this._onDrop.bind(this)
                 };
-                return new DragDrop(d);
+                return new DragDropImpl(d);
             });
             subDragDrop.forEach(d => d.bind(contentform[0]));
             this._dragDrop = this._dragDrop.concat(subDragDrop);
@@ -587,7 +615,8 @@ export class EnhancedJournal extends Application {
             editor.button.style.display = "";
 
         const owner = this.object.isOwner;
-        (game.system.id == "pf2e" ? game.pf2e.TextEditor : TextEditor).enrichHTML(this.object.content, { secrets: owner, documents: true, async: true }).then((content) => {
+        const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+        (game.system.id == "pf2e" ? game.pf2e.TextEditor : TextEditorImpl).enrichHTML(this.object.content, { secrets: owner, documents: true, async: true }).then((content) => {
             $(`.editor-content[data-edit="${name}"]`, this.element).html(content);
         });
         
@@ -649,7 +678,7 @@ export class EnhancedJournal extends Application {
         }
 
         if (this.object instanceof JournalEntry) {
-            const modes = JournalSheet.VIEW_MODES;
+            const modes = JournalSheetImpl.VIEW_MODES;
             let mode = game.user.getFlag("monks-enhanced-journal", `pagestate.${this.object.id}.mode`) ?? this.subsheet?.mode;
             $('.viewmode', html).attr("data-action", "toggleView").attr("title", mode === modes.SINGLE ? "View Multiple Pages" : "View Single Page").find("i").toggleClass("fa-notes", mode === modes.SINGLE).toggleClass("fa-note", mode !== modes.SINGLE);
         }
@@ -1415,17 +1444,23 @@ export class EnhancedJournal extends Application {
         await this.object.setFlag('monks-enhanced-journal', 'type', type);
         if (sheetClass)
             await this.object.setFlag('core', 'sheetClass', sheetClass);
-        await ui.sidebar.tabs.journal.render(true);
+        if (ui.sidebar?.tabs?.journal) {
+            await ui.sidebar.tabs.journal.render(true);
+        }
         //MonksEnhancedJournal.updateDirectory($('#journal'));
     }
 
     async _contextMenu(html) {
-        this._context = new ContextMenu(html, ".bookmark-button", [
+        // v13: Helper to get element from either jQuery object or native element
+        const getElement = (li) => li instanceof HTMLElement ? li : (li?.[0] || li);
+        const getBookmarkId = (li) => getElement(li)?.dataset?.bookmarkId;
+
+        this._context = new ContextMenuImpl(html[0], ".bookmark-button", [
             {
                 name: "Open outside Enhanced Journal",
                 icon: '<i class="fas fa-file-export"></i>',
                 callback: async (li) => {
-                    let bookmark = this.bookmarks.find(b => b.id == li[0].dataset.bookmarkId);
+                    let bookmark = this.bookmarks.find(b => b.id == getBookmarkId(li));
                     let document = await fromUuid(bookmark.entityId);
                     if (!document) {
                         document = game.journal.get(bookmark.entityId);
@@ -1440,7 +1475,7 @@ export class EnhancedJournal extends Application {
                 name: "Open in new tab",
                 icon: '<i class="fas fa-file-export"></i>',
                 callback: async (li) => {
-                    let bookmark = this.bookmarks.find(b => b.id == li[0].dataset.bookmarkId);
+                    let bookmark = this.bookmarks.find(b => b.id == getBookmarkId(li));
                     let document = await fromUuid(bookmark.entityId);
                     if (!document) {
                         document = game.journal.get(bookmark.entityId);
@@ -1455,13 +1490,13 @@ export class EnhancedJournal extends Application {
                 name: "MonksEnhancedJournal.Delete",
                 icon: '<i class="fas fa-trash"></i>',
                 callback: li => {
-                    const bookmark = this.bookmarks.find(b => b.id === li[0].dataset.bookmarkId);
+                    const bookmark = this.bookmarks.find(b => b.id === getBookmarkId(li));
                     this.removeBookmark(bookmark);
                 }
             }
-        ]);
+        ], { jQuery: false });
 
-        this._tabcontext = new ContextMenu(html, ".enhanced-journal-header .tab-bar", [
+        this._tabcontext = new ContextMenuImpl(html[0], ".enhanced-journal-header .tab-bar", [
             {
                 name: "Open outside Enhanced Journal",
                 icon: '<i class="fas fa-file-export"></i>',
@@ -1522,7 +1557,7 @@ export class EnhancedJournal extends Application {
                     this.render();
                 }
             }
-        ]);
+        ], { jQuery: false });
         $('.tab-bar', html).on("contextmenu", (event) => {
             var r = document.querySelector(':root');
             let tab = event.target.closest(".journal-tab");
@@ -1542,8 +1577,8 @@ export class EnhancedJournal extends Application {
         });
 
         let history = await this.getHistory();
-        this._historycontext = new ContextMenu(html, ".mainbar .navigation .nav-button.history", history);
-        this._imgcontext = new ContextMenu(html, ".journal-body.oldentry .tab.picture", [
+        this._historycontext = new ContextMenuImpl(html[0], ".mainbar .navigation .nav-button.history", history, { jQuery: false });
+        this._imgcontext = new ContextMenuImpl(html[0], ".journal-body.oldentry .tab.picture", [
             {
                 name: "MonksEnhancedJournal.Delete",
                 icon: '<i class="fas fa-trash"></i>',
@@ -1551,9 +1586,9 @@ export class EnhancedJournal extends Application {
                     log('Remove image on old entry');
                 }
             }
-        ]);
+        ], { jQuery: false });
 
-        this._convertmenu = new ContextMenu(html, ".nav-button.convert", [
+        this._convertmenu = new ContextMenuImpl(html[0], ".nav-button.convert", [
             {
                 name: i18n("MonksEnhancedJournal.encounter"),
                 icon: '<i class="fas fa-toolbox"></i>',
@@ -1638,7 +1673,7 @@ export class EnhancedJournal extends Application {
                     this.convert('journalentry', "monks-enhanced-journal.TextImageEntrySheet");
                 }
             }
-        ], { eventName: 'click' });
+        ], { eventName: 'click', jQuery: false });
     }
 
     async _onChangeInput(event) {
@@ -1658,7 +1693,8 @@ export class EnhancedJournal extends Application {
         });
         //_onClickPageLink
 
-        ui.journal._contextMenu.call(ui.journal, html);
+        // v13: Context menus are handled automatically by DocumentDirectory through _getEntryContextOptions
+        // No need to manually call _contextMenu (removed in v13)
 
         const directory = html.find(".directory-list");
         const entries = directory.find(".directory-item");
@@ -1667,30 +1703,145 @@ export class EnhancedJournal extends Application {
         html.find(`[data-folder-depth="${this.maxFolderDepth}"] .create-folder`).remove();
         html.find('.toggle-sort').click((event) => {
             event.preventDefault();
-            ui.journal.collection.toggleSortingMode();
-            ui.journal.render();
+            const collection = ui.journal?.collection || game.journal;
+            collection.toggleSortingMode();
+            ui.journal?.render();
         });
-        html.find(".collapse-all").click(ui.journal.collapseAll.bind(this));
+        
+        // v13: collapseAll is a public method that should still exist
+        const collapseHandler = ui.journal?.collapseAll?.bind(ui.journal) || (() => {
+            html.find('.folder.collapsed').removeClass('collapsed');
+        });
+        html.find(".collapse-all").click(collapseHandler);
 
-        // Intersection Observer
-        const observer = new IntersectionObserver(ui.journal._onLazyLoadImage.bind(this), { root: directory[0] });
+        // Intersection Observer for lazy loading images
+        // v13: _onLazyLoadImage is private and may not exist, implement locally
+        const lazyLoadHandler = (entries, observer) => {
+            for (let e of entries) {
+                if (!e.isIntersecting) continue;
+                const li = e.target;
+                const img = li.querySelector("img");
+                if (img && img.dataset.src) {
+                    img.src = img.dataset.src;
+                    delete img.dataset.src;
+                }
+                observer.unobserve(li);
+            }
+        };
+        const observer = new IntersectionObserver(lazyLoadHandler, { root: directory[0] });
         entries.each((i, li) => observer.observe(li));
 
         // Entry-level events
-        directory.on("click", ".entry-name", ui.journal._onClickEntryName.bind(ui.journal));
-        directory.on("click", ".folder-header", ui.journal._toggleFolder.bind(this));
-        const dh = ui.journal._onDragHighlight.bind(this);
-        html.find(".folder").on("dragenter", dh).on("dragleave", dh);
-        //this._contextMenu(html);
+        // v13: Private methods like _onClickEntryName don't exist in ApplicationV2
+        // These need to be handled through the action system or implemented locally
+        directory.on("click", ".entry-name", async (event) => {
+            event.preventDefault();
+            const entryId = event.currentTarget.closest(".directory-item").dataset.documentId;
+            const entry = game.journal.get(entryId);
+            if (entry) this.open(entry, setting("open-new-tab"));
+        });
+        
+        // v13: _toggleFolder may not exist, implement locally
+        directory.on("click", ".folder-header", (event) => {
+            event.preventDefault();
+            const folder = event.currentTarget.closest(".folder");
+            if (folder) folder.classList.toggle("collapsed");
+        });
+        
+        // v13: Drag highlight functionality
+        const dragHighlightHandler = (event) => {
+            const li = event.currentTarget.closest(".folder");
+            if (!li) return;
+            if (event.type === "dragenter") li.classList.add("droptarget");
+            else if (event.type === "dragleave") li.classList.remove("droptarget");
+        };
+        html.find(".folder").on("dragenter", dragHighlightHandler).on("dragleave", dragHighlightHandler);
 
         // Allow folder and entry creation
-        if (ui.journal.canCreateFolder) html.find(".create-folder").click(ui.journal._onCreateFolder.bind(this));
-        if (ui.journal.canCreateEntry) html.find(".create-entry").click(ui.journal._onCreateEntry.bind(this));
+        // v13: _onCreateFolder and _onCreateEntry may not exist
+        const journal = ui.journal;
+        if (journal?.canCreateFolder ?? game.user.can("FOLDER_CREATE")) {
+            html.find(".create-folder").click(async (event) => {
+                event.preventDefault();
+                const button = event.currentTarget;
+                const parent = button.closest(".directory-item");
+                const parentId = parent?.dataset.folderId || null;
+                await Folder.create({
+                    name: game.i18n.localize("FOLDER.Untitled"),
+                    type: "JournalEntry",
+                    parent: parentId
+                });
+            });
+        }
+        
+        if (journal?.canCreateEntry ?? game.user.can("JOURNAL_CREATE")) {
+            html.find(".create-entry").click(async (event) => {
+                event.preventDefault();
+                const button = event.currentTarget;
+                const parent = button.closest(".directory-item");
+                const folder = parent?.dataset.folderId || null;
+                await JournalEntry.create({
+                    name: game.i18n.localize("DOCUMENT.New", { type: game.i18n.localize("DOCUMENT.JournalEntry") }),
+                    folder: folder
+                });
+            });
+        }
 
-        this._searchFilters = [new SearchFilter({ inputSelector: 'input[name="search"]', contentSelector: ".directory-list", callback: ui.journal._onSearchFilter.bind(ui.journal) })];
+        // Search filter
+        // v13: _onSearchFilter is private, implement locally
+        const searchCallback = (event, query, rgx, html) => {
+            const isSearch = !!query;
+            const documentIds = new Set();
+            const folderIds = new Set();
+            
+            // Match documents
+            for (let d of game.journal) {
+                if (isSearch && rgx.test(SearchFilter.cleanQuery(d.name))) {
+                    documentIds.add(d.id);
+                    if (d.folder) folderIds.add(d.folder.id);
+                }
+            }
+            
+            // Match folders
+            if (isSearch) {
+                const folders = game.journal.folders;
+                for (let f of folders) {
+                    if (rgx.test(SearchFilter.cleanQuery(f.name))) {
+                        folderIds.add(f.id);
+                        if (f.folder) folderIds.add(f.folder.id);
+                    }
+                }
+            }
+            
+            // Toggle visibility
+            const directoryList = html.querySelector(".directory-list");
+            if (!directoryList) return;
+            
+            for (let el of directoryList.querySelectorAll(".directory-item")) {
+                if (isSearch) {
+                    const isDoc = el.classList.contains("document");
+                    const isFolder = el.classList.contains("folder");
+                    const id = isDoc ? el.dataset.documentId : el.dataset.folderId;
+                    const match = isDoc ? documentIds.has(id) : folderIds.has(id);
+                    el.style.display = match ? "" : "none";
+                } else {
+                    el.style.display = "";
+                }
+            }
+        };
+        
+        this._searchFilters = [new SearchFilterImpl({ 
+            inputSelector: 'input[name="search"]', 
+            contentSelector: ".directory-list", 
+            callback: searchCallback
+        })];
         this._searchFilters.forEach(f => f.bind(html[0]));
 
-        ui.journal._dragDrop.forEach(d => d.bind(html[0]));
+        // Drag-drop handlers
+        // v13: _dragDrop should still exist as it's part of ApplicationV2
+        if (journal?._dragDrop) {
+            journal._dragDrop.forEach(d => d.bind(html[0]));
+        }
     }
 
     activateListeners(html) {

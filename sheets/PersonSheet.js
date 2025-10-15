@@ -140,7 +140,8 @@ export class PersonSheet extends EnhancedJournalSheet {
         super.activateListeners(html, enhancedjournal);
 
         //$('.journal-header .actor-img img', html).click(this.openActor.bind(this));
-        html.on('dragstart', ".actor-img img", TextEditor._onDragContentLink);
+        const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+        html.on('dragstart', ".actor-img img", TextEditorImpl._onDragContentLink);
 
         $(".generate-name", html).click(this.generateName.bind(this));
 

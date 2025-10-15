@@ -1,34 +1,45 @@
 import { MonksEnhancedJournal, log, error, i18n, setting, makeid, getVolume } from "../monks-enhanced-journal.js";
 
-export class EditSound extends FormApplication {
-    constructor(object, sound, options) {
-        super(object, options);
-
+export class EditSound extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
+    constructor(object, sound, options = {}) {
+        super(options);
+        this.object = object;
         this.soundfile = sound;
     }
 
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "journal-editsound",
-            title: i18n("MonksEnhancedJournal.EditSound"),
-            classes: ["edit-sound"],
-            template: "./modules/monks-enhanced-journal/templates/edit-sound.html",
+    static DEFAULT_OPTIONS = {
+        id: "journal-editsound",
+        classes: ["edit-sound"],
+        tag: "form",
+        form: {
+            handler: EditSound.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
             width: 500,
-            height: "auto",
-            closeOnSubmit: true,
-            popOut: true,
-        });
-    }
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.EditSound",
+            contentClasses: ["standard-form"]
+        }
+    };
 
-    getData(options) {
+    static PARTS = {
+        form: {
+            template: "./modules/monks-enhanced-journal/templates/edit-sound.hbs"
+        }
+    };
+
+    _prepareContext(options) {
         let sound = foundry.utils.mergeObject({volume: 1, loop: true, autoplay: true}, (this.object.getFlag("monks-enhanced-journal", "sound") || {}));
         return {
             sound: sound
         };
     }
 
-    _updateObject(event, formData) {
-        let data = foundry.utils.expandObject(formData);
+    static async #onSubmit(event, form, formData) {
+        let data = foundry.utils.expandObject(formData.object);
 
         if (this.soundfile) {
             let oldData = this.object.getFlag('monks-enhanced-journal', 'sound');
@@ -51,7 +62,7 @@ export class EditSound extends FormApplication {
             }
         }
 
-        this.object.setFlag('monks-enhanced-journal', 'sound', data.sound);
+        await this.object.setFlag('monks-enhanced-journal', 'sound', data.sound);
         this.submitting = true;
     }
 }

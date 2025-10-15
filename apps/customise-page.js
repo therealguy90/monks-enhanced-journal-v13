@@ -1,30 +1,48 @@
 import { MonksEnhancedJournal, log, setting, i18n, makeid } from '../monks-enhanced-journal.js';
 
-export class CustomisePage extends FormApplication {
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "customise-page",
-            classes: ["form"],
-            title: "Customise Page",
-            template: "modules/monks-enhanced-journal/templates/customise/customise-page.html",
-            tabs: [{ navSelector: ".tabs", contentSelector: ".sheet-body", initial: "tabs" }],
-            scrollY: [".item-list"],
+export class CustomisePage extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
+    static DEFAULT_OPTIONS = {
+        id: "customise-page",
+        classes: ["form"],
+        tag: "form",
+        form: {
+            handler: CustomisePage.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
             width: 600,
-            height: 400,
-        });
-    }
+            height: 400
+        },
+        window: {
+            title: "Customise Page",
+            contentClasses: ["standard-form"]
+        },
+        actions: {
+            reset: CustomisePage.resetDefaults,
+            convert: CustomisePage.convertItems
+        }
+    };
 
-    async _renderInner(...args) {
+    static PARTS = {
+        tabs: {
+            template: "templates/generic/tab-navigation.hbs"
+        },
+        form: {
+            template: "modules/monks-enhanced-journal/templates/customise/customise-page.hbs",
+            scrollable: [".item-list"]
+        }
+    };
+
+    async _preRender(context, options) {
+        await super._preRender(context, options);
         delete Handlebars.partials[`modules/monks-enhanced-journal/templates/customise/${this.object.constructor.type}.html`];
         await loadTemplates({
             page: `modules/monks-enhanced-journal/templates/customise/${this.object.constructor.type}.html`,
         });
-        const html = await super._renderInner(...args);
-        return html;
     }
 
-    getData(options) {
-        let data = super.getData(options);
+    _prepareContext(options) {
+        let data = super._prepareContext(options);
         data.generalEdit = false;
         let settings = this.object.sheetSettings();
         let sheetSettings = {};
@@ -36,24 +54,24 @@ export class CustomisePage extends FormApplication {
         return data;
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _onRender(context, options) {
+        super._onRender(context, options);
 
-        html.find("button.reset-all").click(this._onResetDefaults.bind(this));
-        html.find("button.convert-button").click(this._onResetDefaults.bind(this));
-
-        $('.sell-field', html).on("blur", this.validateField.bind(this));
-    };
+        const sellFields = this.element.querySelectorAll('.sell-field');
+        sellFields.forEach(field => {
+            field.addEventListener('blur', this.validateField.bind(this));
+        });
+    }
 
     validateField(event) {
-        let val = parseFloat($(event.currentTarget).val());
+        let val = parseFloat(event.currentTarget.value);
         if (!isNaN(val) && val < 0) {
-            $(event.currentTarget).val('');
+            event.currentTarget.value = '';
         }
     }
 
-    async _updateObject(event, formData) {
-        let data = foundry.utils.expandObject(formData);
+    static async #onSubmit(event, form, formData) {
+        let data = foundry.utils.expandObject(formData.object);
 
         let defaultSettings = this.object.constructor.sheetSettings() || {};
         let settings = data.sheetSettings[this.object.constructor.type] || {};
@@ -76,17 +94,18 @@ export class CustomisePage extends FormApplication {
         this.object.render(true);
     }
 
-    async _onResetDefaults(event) {
+    static async resetDefaults(event, target) {
         await this.object.object.unsetFlag("monks-enhanced-journal", "sheet-settings");
         this.object.render(true);
         this.render(true);
     }
 
-    async convertItems(html, event) {
+    static async convertItems(event, target) {
         event.stopPropagation();
         event.preventDefault();
 
-        const fd = new FormDataExtended(html[0]);
+        const form = this.element.querySelector('form');
+        const fd = new FormDataExtended(form);
         let data = foundry.utils.expandObject(fd.object);
 
         let dataAdjustment = data.sheetSettings.shop.adjustment;

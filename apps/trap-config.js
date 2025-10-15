@@ -1,45 +1,50 @@
-import { MonksEnhancedJournal, log, setting, i18n } from '../monks-enhanced-journal.js';
+import { MonksEnhancedJournal, log, setting, i18n, makeid } from '../monks-enhanced-journal.js';
 
-export class TrapConfig extends FormApplication {
+export class TrapConfig extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
     constructor(object, journalentry, options = {}) {
-        super(object, options);
+        super(options);
+        this.object = object;
         this.journalentry = journalentry;
     }
 
-    /** @override */
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "trap-config",
-            classes: ["form", "trap-sheet"],
-            title: i18n("MonksEnhancedJournal.TrapConfiguration"),
-            template: "modules/monks-enhanced-journal/templates/trap-config.html",
-            width: 400
-        });
+    static DEFAULT_OPTIONS = {
+        id: "trap-config",
+        classes: ["trap-sheet"],
+        tag: "form",
+        form: {
+            handler: TrapConfig.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
+            width: 400,
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.TrapConfiguration",
+            contentClasses: ["standard-form"]
+        }
+    };
+
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/trap-config.hbs"
+        }
+    };
+
+    _prepareContext(options) {
+        return super._prepareContext(options);
     }
 
-    getData(options) {
-        return foundry.utils.mergeObject(super.getData(options),
-            {}, { recursive: false }
-        );
-    }
+    static async #onSubmit(event, form, formData) {
+        log('updating trap', event, formData.object, this.object);
 
-    /* -------------------------------------------- */
-
-    /** @override */
-    async _updateObject(event, formData) {
-        log('updating trap', event, formData, this.object);
-
-        foundry.utils.mergeObject(this.object, formData);
+        foundry.utils.mergeObject(this.object, formData.object);
         let traps = foundry.utils.duplicate(this.journalentry.object.flags["monks-enhanced-journal"].traps || []);
         if (this.object.id == undefined) {
             this.object.id = makeid();
             traps.push(this.object);
         }
 
-        this.journalentry.object.setFlag('monks-enhanced-journal', 'traps', traps);
-    }
-
-    activateListeners(html) {
-        super.activateListeners(html);
+        await this.journalentry.object.setFlag('monks-enhanced-journal', 'traps', traps);
     }
 }

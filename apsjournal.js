@@ -148,8 +148,9 @@ export class APSJ {
      **/
 
     static async getBlock(colour) {
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
         if (['card', 'scroll', 'encounter', 'read-aloud'].includes(colour)) {
-            let content = await renderTemplate(
+            let content = await renderTemplateImpl(
                 `modules/monks-enhanced-journal/templates/apsjournal/${colour}.html`
             );
             return content;
@@ -161,7 +162,7 @@ export class APSJ {
                 body: i18n(`APSJournal.block-${colour}.body`),
             };
 
-            let content = await renderTemplate(
+            let content = await renderTemplateImpl(
                 'modules/monks-enhanced-journal/templates/apsjournal/block.html',
                 data
             );
@@ -170,7 +171,8 @@ export class APSJ {
     }
 
     static async getDialog(colour, side) {
-        let content = await renderTemplate(
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let content = await renderTemplateImpl(
             'modules/monks-enhanced-journal/templates/apsjournal/dialog.html',
             { colour, side }
         );
@@ -218,7 +220,8 @@ export class APSJ {
                 break;
         }
 
-        let content = await renderTemplate(
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let content = await renderTemplateImpl(
             'modules/monks-enhanced-journal/templates/apsjournal/panel.html',
             data
         );

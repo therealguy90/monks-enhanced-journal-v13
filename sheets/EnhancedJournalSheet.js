@@ -4,7 +4,9 @@ import { EditSound } from "../apps/editsound.js";
 import { MakeOffering } from "../apps/make-offering.js";
 import { getValue, setValue, setPrice, MEJHelpers } from "../helpers.js";
 
-export class EnhancedJournalContextMenu extends ContextMenu {
+const ContextMenuImpl = foundry.applications.ux.ContextMenu.implementation;
+
+export class EnhancedJournalContextMenu extends ContextMenuImpl {
     constructor(...args) {
         super(...args);
     }
@@ -40,7 +42,9 @@ export class EnhancedJournalContextMenu extends ContextMenu {
     }
 }
 
-export class EnhancedJournalSheet extends JournalPageSheet {
+const JournalPageSheetImpl = foundry.appv1.sheets.JournalPageSheet;
+
+export class EnhancedJournalSheet extends JournalPageSheetImpl {
     constructor(object, options = {}) {
         super(object, options);
 
@@ -165,7 +169,8 @@ export class EnhancedJournalSheet extends JournalPageSheet {
         }
 
         //this._convertFormats(data);
-        data.enrichedText = await TextEditor.enrichHTML(data.document?.text?.content, {
+        const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+        data.enrichedText = await TextEditorImpl.enrichHTML(data.document?.text?.content, {
             relativeTo: this.object,
             secrets: this.object.isOwner,
             async: true
@@ -180,7 +185,7 @@ export class EnhancedJournalSheet extends JournalPageSheet {
         data.userdata = {};
         if (data.data.flags && data.data.flags["monks-enhanced-journal"] && data.data.flags["monks-enhanced-journal"][game.user.id]) {
             data.userdata = data.data.flags["monks-enhanced-journal"][game.user.id];
-            data.userdata.enrichedText = await TextEditor.enrichHTML((data.userdata.notes || ""), {
+            data.userdata.enrichedText = await TextEditorImpl.enrichHTML((data.userdata.notes || ""), {
                 relativeTo: this.object,
                 secrets: this.object.isOwner,
                 async: true
@@ -334,7 +339,7 @@ export class EnhancedJournalSheet extends JournalPageSheet {
         super.activateListeners(html);
         this._contextMenu(html);
 
-        new EnhancedJournalContextMenu($(html), (this.constructor.type == "text" ? ".editor-parent" : ".tab.description .tab-inner"), this._getDescriptionContextOptions());
+        new EnhancedJournalContextMenu(html[0] || html, (this.constructor.type == "text" ? ".editor-parent" : ".tab.description .tab-inner"), this._getDescriptionContextOptions(), { jQuery: false });
 
         if (!this.isEditable) {
             html.find(".tab.notes .editor-content[data-edit]").each((i, div) => this._activateEditor(div));
@@ -346,7 +351,7 @@ export class EnhancedJournalSheet extends JournalPageSheet {
         $('a[href^="#"]', html).click(this._onClickAnchor.bind(this));
 
         if (this.object.isOwner && this.object.src) {
-            new EnhancedJournalContextMenu($(html), '.sheet-image,div.picture-img', this._getImageContextOptions());
+            new EnhancedJournalContextMenu(html[0] || html, '.sheet-image,div.picture-img', this._getImageContextOptions(), { jQuery: false });
         } else {
             if (!this.object.src) {
                 $('img[data-edit],div.picture-img', html).contextmenu(this._onEditImage.bind(this));
@@ -1469,7 +1474,8 @@ export class EnhancedJournalSheet extends JournalPageSheet {
         if (!whisper.find(u => u == game.user.id))
             whisper.push(game.user.id);
         let speaker = ChatMessage.getSpeaker();
-        let content = await renderTemplate("./modules/monks-enhanced-journal/templates/request-item.html", messageContent);
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let content = await renderTemplateImpl("./modules/monks-enhanced-journal/templates/request-item.html", messageContent);
         let messageData = {
             user: game.user.id,
             speaker: speaker,
@@ -1496,7 +1502,8 @@ export class EnhancedJournalSheet extends JournalPageSheet {
         let details = MonksEnhancedJournal.getItemDetails(item);
 
         let quantity = 1;
-        let content = await renderTemplate('/modules/monks-enhanced-journal/templates/confirm-purchase.html',
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let content = await renderTemplateImpl('/modules/monks-enhanced-journal/templates/confirm-purchase.html',
             {
                 msg: format("MonksEnhancedJournal.HowManyWouldYouLike", { verb: verb }),
                 img: details.img,
@@ -1599,7 +1606,8 @@ export class EnhancedJournalSheet extends JournalPageSheet {
                         whisper.push(user);
                 }
             }
-            let content = await renderTemplate("./modules/monks-enhanced-journal/templates/receive-item.html", messageContent);
+            const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+            let content = await renderTemplateImpl("./modules/monks-enhanced-journal/templates/receive-item.html", messageContent);
             let messageData = {
                 user: user,
                 speaker: speaker,
@@ -1823,7 +1831,8 @@ export class EnhancedJournalSheet extends JournalPageSheet {
 
         let table = await fromUuid(lastrolltable);
 
-        let html = await renderTemplate("modules/monks-enhanced-journal/templates/roll-table.html", { rollTables: rolltables, useFrom: useFrom, lastrolltable: lastrolltable, rollformula: table?.formula });
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let html = await renderTemplateImpl("modules/monks-enhanced-journal/templates/roll-table.html", { rollTables: rolltables, useFrom: useFrom, lastrolltable: lastrolltable, rollformula: table?.formula });
         Dialog.confirm({
             title: i18n("MonksEnhancedJournal.PopulateFromRollTable"),
             content: html,

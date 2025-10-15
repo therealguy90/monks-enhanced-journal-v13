@@ -1,28 +1,43 @@
 import { MonksEnhancedJournal, log, setting, i18n, makeid } from '../monks-enhanced-journal.js';
 
-export class Objectives extends FormApplication {
+export class Objectives extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
     constructor(object, journalentry, options = {}) {
-        super(object, options);
+        super(options);
+        this.object = object;
         this.journalentry = journalentry;
     }
 
-    /** @override */
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "objectives",
-            classes: ["form", "objective-sheet"],
-            title: i18n("MonksEnhancedJournal.Objectives"),
-            template: "modules/monks-enhanced-journal/templates/objectives.html",
+    static DEFAULT_OPTIONS = {
+        id: "objectives",
+        classes: ["objective-sheet"],
+        tag: "form",
+        form: {
+            handler: Objectives.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
             width: 500,
-            resizable: true
-        });
-    }
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.Objectives",
+            resizable: true,
+            contentClasses: ["standard-form"]
+        }
+    };
 
-    async getData() {
-        let data = await super.getData();
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/objectives.hbs"
+        }
+    };
+
+    async _prepareContext(options) {
+        let data = super._prepareContext(options);
 
         //this._convertFormats(data);
-        data.enrichedText = await TextEditor.enrichHTML(data.object.content, {
+        const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+        data.enrichedText = await TextEditorImpl.enrichHTML(data.object.content, {
             relativeTo: this.journalentry.object,
             secrets: this.journalentry.object.isOwner,
             async: true
@@ -31,18 +46,15 @@ export class Objectives extends FormApplication {
         return data;
     }
 
-    /* -------------------------------------------- */
-
-    /** @override */
-    async _updateObject(event, formData) {
-        log('updating objective', event, formData, this.object);
-        foundry.utils.mergeObject(this.object, formData);
+    static async #onSubmit(event, form, formData) {
+        log('updating objective', event, formData.object, this.object);
+        foundry.utils.mergeObject(this.object, formData.object);
         let objectives = foundry.utils.duplicate(this.journalentry.object.flags["monks-enhanced-journal"].objectives || []);
         if (this.object.id == undefined) {
             this.object.id = makeid();
             objectives.push(this.object);
         }
 
-        this.journalentry.object.setFlag('monks-enhanced-journal', 'objectives', objectives);
+        await this.journalentry.object.setFlag('monks-enhanced-journal', 'objectives', objectives);
     }
 }

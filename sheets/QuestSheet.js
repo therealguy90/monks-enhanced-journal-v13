@@ -45,7 +45,8 @@ export class QuestSheet extends EnhancedJournalSheet {
         }).map(async (o) => {
             let counter = { counter: ($.isNumeric(o.required) ? (o.done || 0) + '/' + o.required : '') };
 
-            o.content = await TextEditor.enrichHTML(o.content, {
+            const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+            o.content = await TextEditorImpl.enrichHTML(o.content, {
                 relativeTo: this.object,
                 secrets: this.object.isOwner,
                 async: true
@@ -411,7 +412,8 @@ export class QuestSheet extends EnhancedJournalSheet {
         }
         let template = "modules/monks-enhanced-journal/templates/reward.html";
 
-        let html = await renderTemplate(template, reward);
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let html = await renderTemplateImpl(template, reward);
         html = $(html);
 
         $('.reward-list .journal-tab[data-reward-id="' + id + '"]', this.element).addClass('active').siblings().removeClass('active');
@@ -605,7 +607,8 @@ export class QuestSheet extends EnhancedJournalSheet {
         let target = event.currentTarget;
         let li = target.closest('li');
         event.currentTarget = li;
-        TextEditor._onClickContentLink(event);
+        const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+        TextEditorImpl._onClickContentLink(event);
     }
 
     static async itemDropped(id, actor, entry) {

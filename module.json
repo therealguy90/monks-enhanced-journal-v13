@@ -100,11 +100,11 @@
   "bugs": "https://github.com/ironmonk88/monks-enhanced-journal/issues",
   "id": "monks-enhanced-journal",
   "compatibility": {
-    "minimum": "12",
-    "verified": "12"
+    "minimum": "13",
+    "verified": "13"
   },
-  "minimumCoreVersion": "12",
-  "compatibleCoreVersion": "12",
+  "minimumCoreVersion": "13",
+  "compatibleCoreVersion": "13",
   "flags": {
     "allowBugReporter": true
   }

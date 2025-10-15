@@ -129,7 +129,8 @@ export class EncounterSheet extends EnhancedJournalSheet {
         //monster
         $('.monster-icon', html).click(this.clickItem.bind(this));
         $('.monster-delete', html).on('click', $.proxy(this._deleteItem, this));
-        html.on('dragstart', ".monster-icon", TextEditor._onDragContentLink);
+        const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+        html.on('dragstart', ".monster-icon", TextEditorImpl._onDragContentLink);
         $('.select-encounter', html).click(this.constructor.selectEncounter.bind(this.object));
         $('.create-encounter', html).click(this.constructor.startEncounter.bind(this.object, false));
         $('.create-combat', html).click(this.constructor.startEncounter.bind(this.object, true));
@@ -376,7 +377,7 @@ export class EncounterSheet extends EnhancedJournalSheet {
         let tokens = (this.flags['monks-enhanced-journal']?.tokens || []);
 
         canvas.tokens.activate();
-        canvas.hud.note.clear();
+        canvas.hud.note.close();
         canvas.tokens.releaseAll();
         for (let tokenid of tokens) {
             let token = canvas.tokens.get(tokenid);

@@ -91,6 +91,24 @@ export let patchFunc = (prop, func, type = "WRAPPER") => {
     }
 }
 
+// V13 Namespaced class references
+const JournalDirectoryImpl = foundry.applications.sidebar.tabs.JournalDirectory || JournalDirectory;
+const HotbarImpl = foundry.applications.ui.Hotbar || Hotbar;
+const JournalImpl = foundry.documents.collections.Journal || Journal;
+const JournalEntryPageImpl = foundry.documents.JournalEntryPage || JournalEntryPage;
+const JournalEntryImpl = foundry.documents.JournalEntry || JournalEntry;
+const CompendiumImpl = foundry.applications.sidebar.apps.Compendium || Compendium;
+const JournalTextPageSheetImpl = foundry.appv1.sheets.JournalTextPageSheet || JournalTextPageSheet;
+const JournalSheetImpl = foundry.appv1.sheets.JournalSheet || JournalSheet;
+const JournalPageSheetImpl = foundry.appv1.sheets.JournalPageSheet || JournalPageSheet;
+const TemplateLayerImpl = foundry.canvas.layers.TemplateLayer || TemplateLayer;
+const CompendiumCollectionImpl = foundry.documents.collections.CompendiumCollection || CompendiumCollection;
+const NoteImpl = foundry.canvas.placeables.Note || Note;
+const TokenImpl = foundry.canvas.placeables.Token || Token;
+const SceneNavigationImpl = foundry.applications.ui.SceneNavigation || SceneNavigation;
+const NotesLayerImpl = foundry.canvas.layers.NotesLayer || NotesLayer;
+const TextEditorImpl = foundry.applications.ux.TextEditor?.implementation || TextEditor;
+
 export class MonksEnhancedJournal {
     static _oldSheetClass;
     static journal;
@@ -358,11 +376,14 @@ export class MonksEnhancedJournal {
 
         CONFIG.TextEditor.enrichers.push({ id: 'MonksEnhancedJournalPicture', pattern: new RegExp(`@(Picture)\\[([^\\]]+)\\](?:{([^}]+)})?`, 'g'), enricher: MonksEnhancedJournal._createPictureLink });
 
-        Note.prototype._canHUD = function(user, event) {
+        const NoteImpl = foundry.canvas.placeables.Note;
+        const NotesLayerImpl = foundry.canvas.layers.NotesLayer;
+
+        NoteImpl.prototype._canHUD = function(user, event) {
             return game.user.isGM && this.entry;
         }
 
-        Object.defineProperty(NotesLayer.prototype, 'hud', {
+        Object.defineProperty(NotesLayerImpl.prototype, 'hud', {
             get: function () {
                 return canvas.hud.note;
             }
@@ -377,22 +398,42 @@ export class MonksEnhancedJournal {
             });
         }*/
 
-        patchFunc("TokenLayer.prototype._onClickRight", function (wrapper, ...args) {
-            wrapper(...args);
-            canvas.hud.note.clear();
-        });
-        patchFunc("TokenLayer.prototype._onClickLeft", function (wrapper, ...args) {
-            wrapper(...args);
-            canvas.hud.note.clear();
-        });
+        const TokenLayerImpl = foundry.canvas.layers.TokenLayer;
+        const TokenImpl = CONFIG.Token.objectClass;
 
-        patchFunc("Token.prototype._onClickRight", function (wrapper, ...args) {
-            wrapper(...args);
-            canvas.hud.note.clear();
-        });
+        if (game.modules.get("lib-wrapper")?.active) {
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.layers.TokenLayer.prototype._onClickRight", function (wrapper, ...args) {
+                wrapper(...args);
+                canvas.hud.note.close();
+            }, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.layers.TokenLayer.prototype._onClickLeft", function (wrapper, ...args) {
+                wrapper(...args);
+                canvas.hud.note.close();
+            }, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.placeables.Token.prototype._onClickRight", function (wrapper, ...args) {
+                wrapper(...args);
+                canvas.hud.note.close();
+            }, "WRAPPER");
+        } else {
+            const oldTokenLayerClickRight = TokenLayerImpl.prototype._onClickRight;
+            TokenLayerImpl.prototype._onClickRight = function(...args) {
+                oldTokenLayerClickRight.call(this, ...args);
+                canvas.hud.note.close();
+            };
+            const oldTokenLayerClickLeft = TokenLayerImpl.prototype._onClickLeft;
+            TokenLayerImpl.prototype._onClickLeft = function(...args) {
+                oldTokenLayerClickLeft.call(this, ...args);
+                canvas.hud.note.close();
+            };
+            const oldTokenClickRight = TokenImpl.prototype._onClickRight;
+            TokenImpl.prototype._onClickRight = function(...args) {
+                oldTokenClickRight.call(this, ...args);
+                canvas.hud.note.close();
+            };
+        }
 
-        Note.prototype._onMouseOut = function (event) {
-            canvas.hud.note.clear();
+        NoteImpl.prototype._onMouseOut = function (event) {
+            canvas.hud.note.close();
         }
 
         let clickDocumentName = function (wrapped, ...args) {
@@ -427,9 +468,9 @@ export class MonksEnhancedJournal {
             }
         }
 
-        patchFunc("JournalDirectory.prototype._onClickEntryName", clickDocumentName, "MIXED");
+        patchFunc("foundry.applications.sidebar.tabs.JournalDirectory.prototype._onClickEntry", clickDocumentName, "MIXED");
 
-        patchFunc("Hotbar.prototype.constructor.toggleDocumentSheet", async (...args) => {
+        patchFunc("foundry.applications.ui.Hotbar.prototype.constructor.toggleDocumentSheet", async (...args) => {
             const [uuid] = args;
             let doc = await fromUuid(uuid);
             if (!doc) {
@@ -449,7 +490,7 @@ export class MonksEnhancedJournal {
             return sheet.rendered ? sheet.close() : sheet.render(true);
         }, "OVERRIDE");
 
-        patchFunc("Hotbar.prototype._createDocumentSheetToggle", async function (wrapper, ...args) {
+        patchFunc("foundry.applications.ui.Hotbar.prototype._createDocumentSheetToggle", async function (wrapper, ...args) {
             let macro = await wrapper.call(this, ...args);
             let doc = args[0];
             if (MonksEnhancedJournal.getMEJType(doc)) {
@@ -459,7 +500,7 @@ export class MonksEnhancedJournal {
             return macro;
         });
 
-        patchFunc("JournalDirectory.prototype._onDragStart", function (...args) {
+        patchFunc("foundry.applications.sidebar.tabs.JournalDirectory.prototype._onDragStart", function (...args) {
             let event = args[0];
             event.stopPropagation();
             if (ui.context) ui.context.close({ animate: false });
@@ -476,23 +517,23 @@ export class MonksEnhancedJournal {
         }, "OVERRIDE");
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.ignore_conflicts("monks-enhanced-journal", "monks-active-tiles", "JournalDirectory.prototype._onClickEntryName");
-            libWrapper.ignore_conflicts("monks-enhanced-journal", "multiple-document-selection", "JournalDirectory.prototype._onClickEntryName");
-            libWrapper.ignore_conflicts("monks-enhanced-journal", "multiple-document-selection", "Compendium.prototype._onClickEntryName");
+            libWrapper.ignore_conflicts("monks-enhanced-journal", "monks-active-tiles", "JournalDirectory.prototype._onClickEntry");
+            libWrapper.ignore_conflicts("monks-enhanced-journal", "multiple-document-selection", "JournalDirectory.prototype._onClickEntry");
+            libWrapper.ignore_conflicts("monks-enhanced-journal", "multiple-document-selection", "Compendium.prototype._onClickEntry");
             libWrapper.ignore_conflicts("monks-enhanced-journal", "sfrpg", "TemplateLayer.prototype._onDragLeftStart");
         }
 
-        let oldRenderPopout = JournalDirectory.prototype.renderPopout;
-        JournalDirectory.prototype.renderPopout = function () {
+        let oldRenderPopout = JournalDirectoryImpl.prototype.renderPopout;
+        JournalDirectoryImpl.prototype.renderPopout = function () {
             if (!MonksEnhancedJournal.openJournalEntry())
                 return oldRenderPopout.call(this);
         }
 
-        Journal.prototype.constructor._showEntry = async function(entryId, mode = null, force = true, showid) {
+        JournalImpl.prototype.constructor._showEntry = async function(entryId, mode = null, force = true, showid) {
             let entry = await fromUuid(entryId);
-            const options = { tempOwnership: force, mode: JournalSheet.VIEW_MODES.MULTIPLE, pageIndex: 0 };
-            if (entry instanceof JournalEntryPage) {
-                options.mode = JournalSheet.VIEW_MODES.SINGLE;
+            const options = { tempOwnership: force, mode: JournalSheetImpl.VIEW_MODES.MULTIPLE, pageIndex: 0 };
+            if (entry instanceof JournalEntryPageImpl) {
+                options.mode = JournalSheetImpl.VIEW_MODES.SINGLE;
                 options.pageId = entry.id;
                 // Set temporary observer permissions for this page.
                 entry.ownership[game.userId] = CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER;
@@ -522,8 +563,8 @@ export class MonksEnhancedJournal {
             }
         }
 
-        Journal.prototype.constructor.showDialog = async function (doc, options) {
-            if (!((doc instanceof JournalEntry) || (doc instanceof JournalEntryPage))) return;
+        JournalImpl.prototype.constructor.showDialog = async function (doc, options) {
+            if (!((doc instanceof JournalEntryImpl) || (doc instanceof JournalEntryPageImpl))) return;
 
             if (!doc.isOwner) return ui.notifications.error("JOURNAL.ShowBadPermissions", { localize: true });
             if (game.users.size < 2) return ui.notifications.warn("JOURNAL.ShowNoPlayers", { localize: true });
@@ -542,7 +583,8 @@ export class MonksEnhancedJournal {
             let showAs = doc.getFlag("monks-enhanced-journal", "showAs") || (doc.type == "image" ? "image" : options?.showAs || "journal");
             if (!hasImage && showAs != "journal")
                 showAs = "journal";
-            const html = await renderTemplate("modules/monks-enhanced-journal/templates/dialog-show.html", { users, levels, hasImage, showAs });
+            const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+            const html = await renderTemplateImpl("modules/monks-enhanced-journal/templates/dialog-show.html", { users, levels, hasImage, showAs });
 
             return Dialog.prompt({
                 title: game.i18n.format("JOURNAL.ShowEntry", { name: doc.name }),
@@ -821,7 +863,7 @@ export class MonksEnhancedJournal {
                 return wrapped(...args);
         }
 
-        patchFunc("Compendium.prototype._onClickEntryName", clickCompendiumEntry, "MIXED");
+        patchFunc("foundry.applications.sidebar.apps.Compendium.prototype._onClickEntry", clickCompendiumEntry, "MIXED");
 
         let updateJournalEntryPage = async function (wrapped, ...args) {
             let [data, context] = args;
@@ -932,7 +974,7 @@ export class MonksEnhancedJournal {
         }, "MIXED");
         */
 
-        patchFunc("JournalTextPageSheet.prototype.onAutosave", function (...args) {
+        patchFunc("foundry.appv1.sheets.JournalTextPageSheet.prototype.onAutosave", function (...args) {
             this.object.parent?._sheet?.render(false);
         }, "OVERRIDE");
 
@@ -973,10 +1015,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "JournalSheet.prototype._getPageData", getPageData, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.appv1.sheets.JournalSheet.prototype._getPageData", getPageData, "WRAPPER");
         } else {
-            const oldGetPageData = JournalSheet.prototype._getPageData;
-            JournalSheet.prototype._getPageData = function (event) {
+            const oldGetPageData = JournalSheetImpl.prototype._getPageData;
+            JournalSheetImpl.prototype._getPageData = function (event) {
                 return getPageData.call(this, oldGetPageData.bind(this), ...arguments);
             }
         }
@@ -995,10 +1037,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "JournalPageSheet.prototype._getSubmitData", pageGetSubmitData, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.appv1.sheets.JournalPageSheet.prototype._getSubmitData", pageGetSubmitData, "WRAPPER");
         } else {
-            const oldPageSubmit = JournalPageSheet.prototype._getSubmitData;
-            JournalPageSheet.prototype._getSubmitData = function (event) {
+            const oldPageSubmit = JournalPageSheetImpl.prototype._getSubmitData;
+            JournalPageSheetImpl.prototype._getSubmitData = function (event) {
                 return pageGetSubmitData.call(this, oldPageSubmit.bind(this), ...arguments);
             }
         }
@@ -1018,10 +1060,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "JournalPageSheet.prototype._configureProseMirrorPlugins", proseMirrorPlugins, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.appv1.sheets.JournalPageSheet.prototype._configureProseMirrorPlugins", proseMirrorPlugins, "WRAPPER");
         } else {
-            const oldProseMirrorPlugins = JournalPageSheet.prototype._configureProseMirrorPlugins;
-            JournalPageSheet.prototype._configureProseMirrorPlugins = function (event) {
+            const oldProseMirrorPlugins = JournalPageSheetImpl.prototype._configureProseMirrorPlugins;
+            JournalPageSheetImpl.prototype._configureProseMirrorPlugins = function (event) {
                 return proseMirrorPlugins.call(this, oldProseMirrorPlugins.bind(this), ...arguments);
             }
         }
@@ -1057,10 +1099,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "TemplateLayer.prototype._onDragLeftStart", onTemplateDragStart, "MIXED");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.layers.TemplateLayer.prototype._onDragLeftStart", onTemplateDragStart, "MIXED");
         } else {
-            const oldTemplateDragStart = TemplateLayer.prototype._onDragLeftStart;
-            TemplateLayer.prototype._onDragLeftStart = function (event) {
+            const oldTemplateDragStart = TemplateLayerImpl.prototype._onDragLeftStart;
+            TemplateLayerImpl.prototype._onDragLeftStart = function (event) {
                 return onTemplateDragStart.call(this, oldTemplateDragStart.bind(this), ...arguments);
             }
         }
@@ -1096,10 +1138,10 @@ export class MonksEnhancedJournal {
             return stripData(oldToCompendium.call(this, pack));
         }
 
-        let oldImportDocument = CompendiumCollection.prototype.importDocument;
-        CompendiumCollection.prototype.importDocument = function (document, options = {}) {
+        let oldImportDocument = CompendiumCollectionImpl.prototype.importDocument;
+        CompendiumCollectionImpl.prototype.importDocument = function (document, options = {}) {
             options.renderSheet = false;
-            if (document instanceof JournalEntry && document.pages.size == 1 && !!foundry.utils.getProperty(document.pages.contents[0], "flags.monks-enhanced-journal.type")) {
+            if (document instanceof JournalEntryImpl && document.pages.size == 1 && !!foundry.utils.getProperty(document.pages.contents[0], "flags.monks-enhanced-journal.type")) {
                 let type = foundry.utils.getProperty(document.pages.contents[0], "flags.monks-enhanced-journal.type");
                 if (type == "base" || type == "oldentry") type = "journalentry";
                 let types = MonksEnhancedJournal.getDocumentTypes();
@@ -1113,8 +1155,8 @@ export class MonksEnhancedJournal {
             return oldImportDocument.call(this, document, options);
         }
 
-        let oldImportFromCompendium = Journal.prototype.importFromCompendium;
-        Journal.prototype.importFromCompendium = async function (collection, id, updateData = {}, options = {}) {
+        let oldImportFromCompendium = JournalImpl.prototype.importFromCompendium;
+        JournalImpl.prototype.importFromCompendium = async function (collection, id, updateData = {}, options = {}) {
             options.renderSheet = false;
             return oldImportFromCompendium.call(this, collection, id, updateData, options);
         }
@@ -1166,10 +1208,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "Note.prototype._onClickLeft2", clickNote2, "OVERRIDE");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.placeables.Note.prototype._onClickLeft2", clickNote2, "OVERRIDE");
         } else {
-            const oldClickNote = Note.prototype._onClickLeft2;
-            Note.prototype._onClickLeft2 = function (event) {
+            const oldClickNote = NoteImpl.prototype._onClickLeft2;
+            NoteImpl.prototype._onClickLeft2 = function (event) {
                 return clickNote2.call(this, oldClickNote.bind(this));
             }
         }
@@ -1186,10 +1228,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "Note.prototype._canView", noteCanView, "OVERRIDE");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.placeables.Note.prototype._canView", noteCanView, "OVERRIDE");
         } else {
-            const oldCanView = Note.prototype._canView;
-            Note.prototype._canView = function (event) {
+            const oldCanView = NoteImpl.prototype._canView;
+            NoteImpl.prototype._canView = function (event) {
                 return noteCanView.call(this, oldCanView.bind(this));
             }
         }
@@ -1204,19 +1246,19 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "Note.prototype._onClickLeft", clickNote, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.placeables.Note.prototype._onClickLeft", clickNote, "WRAPPER");
         } else {
-            const oldClickNote = Note.prototype._onClickLeft;
-            Note.prototype._onClickLeft = function (event) {
+            const oldClickNote = NoteImpl.prototype._onClickLeft;
+            NoteImpl.prototype._onClickLeft = function (event) {
                 return clickNote.call(this, oldClickNote.bind(this), ...arguments);
             }
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "Note.prototype._canControl", clickNote, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.placeables.Note.prototype._canControl", clickNote, "WRAPPER");
         } else {
-            const oldOnCanControl = Note.prototype._canControl;
-            Note.prototype._canControl = function (event) {
+            const oldOnCanControl = NoteImpl.prototype._canControl;
+            NoteImpl.prototype._canControl = function (event) {
                 return clickNote.call(this, oldOnCanControl.bind(this), ...arguments);
             }
         }
@@ -1231,10 +1273,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "Token.prototype._canControl", onCanControlToken, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.placeables.Token.prototype._canControl", onCanControlToken, "WRAPPER");
         } else {
-            const oldOnCanControl = Token.prototype._canControl;
-            Token.prototype._canControl = function (event) {
+            const oldOnCanControl = TokenImpl.prototype._canControl;
+            TokenImpl.prototype._canControl = function (event) {
                 return onCanControlToken.call(this, oldOnCanControl.bind(this), ...arguments);
             }
         }
@@ -1279,10 +1321,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "SceneNavigation.prototype._getContextMenuOptions", onSceneContextMenu, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.applications.ui.SceneNavigation.prototype._getContextMenuOptions", onSceneContextMenu, "WRAPPER");
         } else {
-            const oldSceneContextMenu = SceneNavigation.prototype._getContextMenuOptions;
-            SceneNavigation.prototype._getContextMenuOptions = function (event) {
+            const oldSceneContextMenu = SceneNavigationImpl.prototype._getContextMenuOptions;
+            SceneNavigationImpl.prototype._getContextMenuOptions = function (event) {
                 return onSceneContextMenu.call(this, oldSceneContextMenu.bind(this), ...arguments);
             }
         }
@@ -1315,10 +1357,10 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "NotesLayer.prototype._createPreview", notesCreatePreview, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.canvas.layers.NotesLayer.prototype._createPreview", notesCreatePreview, "WRAPPER");
         } else {
-            const oldCreatePreview = NotesLayer.prototype._createPreview;
-            NotesLayer.prototype._createPreview = function (event) {
+            const oldCreatePreview = NotesLayerImpl.prototype._createPreview;
+            NotesLayerImpl.prototype._createPreview = function (event) {
                 return notesCreatePreview.call(this, oldCreatePreview.bind(this), ...arguments);
             }
         }
@@ -1377,13 +1419,10 @@ export class MonksEnhancedJournal {
             return a;
         }
 
-        if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "TextEditor._createContentLink", createContentLink, "MIXED");
-        } else {
-            const oldCreateContentLink = TextEditor._createContentLink;
-            TextEditor._createContentLink = function (event) {
-                return createContentLink.call(this, oldCreateContentLink.bind(this), ...arguments);
-            }
+        // Use direct monkey patching to avoid libWrapper's global access during path resolution
+        const oldCreateContentLink = TextEditorImpl._createContentLink;
+        TextEditorImpl._createContentLink = function (match, options) {
+            return createContentLink.call(this, oldCreateContentLink.bind(this), match, options);
         }
 
         let onCreateDialog = async function (wrapped, ...args) {
@@ -1444,23 +1483,24 @@ export class MonksEnhancedJournal {
             return context;
         }
 
-        if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "JournalSheet.prototype._getEntryContextOptions", journalSheetContext, "WRAPPER");
-        } else {
-            const oldContext = JournalSheet.prototype._getEntryContextOptions;
-            JournalSheet.prototype._getEntryContextOptions = function (event) {
-                return journalSheetContext.call(this, oldContext.bind(this), ...arguments);
-            }
+        // Use direct monkey patching to avoid libWrapper's global access during path resolution
+        const oldContext = JournalSheetImpl.prototype._getEntryContextOptions;
+        JournalSheetImpl.prototype._getEntryContextOptions = function () {
+            return journalSheetContext.call(this, oldContext.bind(this), ...arguments);
         }
 
         let onDirectoryContextMenu = function (wrapped, ...args) {
             let context = wrapped(...args);
 
+            // v13: Helper to get element from either jQuery object or native element
+            const getElement = (li) => li instanceof HTMLElement ? li : (li?.[0] || li);
+            const getEntryId = (li) => getElement(li)?.dataset?.entryId || getElement(li)?.dataset?.documentId;
+
             context.push({
                 name: i18n("MonksEnhancedJournal.ConvertToEnhancedJournal"),
                 icon: '<i class="fas fa-file-arrow-down"></i>',
                 condition: li => {
-                    let journal = game.journal.get(li[0].dataset.entryId);
+                    let journal = game.journal.get(getEntryId(li));
                     if (!journal)
                         return false;
 
@@ -1470,7 +1510,7 @@ export class MonksEnhancedJournal {
                     return !MonksEnhancedJournal.getMEJType(journal);
                 },
                 callback: async (li) => {
-                    let journal = game.journal.get(li[0].dataset.entryId);
+                    let journal = game.journal.get(getEntryId(li));
                     if (journal) {
                         let isGood = true;
                         if (journal.pages.size > 1) {
@@ -1519,7 +1559,7 @@ export class MonksEnhancedJournal {
                         return game.user.isGM || setting("allow-player");
                     },
                     callback: async (li) => {
-                        let journal = game.journal.get(li[0].dataset.entryId);
+                        let journal = game.journal.get(getEntryId(li));
                         if (journal) {
                             MonksEnhancedJournal.fixType(journal);
                             if (!MonksEnhancedJournal.openJournalEntry(journal, { newtab: setting("open-new-tab") }))
@@ -1535,7 +1575,7 @@ export class MonksEnhancedJournal {
                         return game.user.isGM || setting("allow-player");
                     },
                     callback: async (li) => {
-                        let journal = game.journal.get(li[0].dataset.entryId);
+                        let journal = game.journal.get(getEntryId(li));
                         if (journal) {
                             if (!!MonksEnhancedJournal.getMEJType(journal)) {
                                 let page = journal.pages.contents[0];
@@ -1556,7 +1596,7 @@ export class MonksEnhancedJournal {
                         return game.user.isGM || setting("allow-player");
                     },
                     callback: async (li) => {
-                        let journal = game.journal.get(li[0].dataset.entryId);
+                        let journal = game.journal.get(getEntryId(li));
                         if (journal) {
                             MonksEnhancedJournal.fixType(journal);
                             if (!MonksEnhancedJournal.openJournalEntry(journal, { newtab: true }))
@@ -1569,13 +1609,10 @@ export class MonksEnhancedJournal {
             return context;
         }
 
-        if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "JournalDirectory.prototype._getEntryContextOptions", onDirectoryContextMenu, "WRAPPER");
-        } else {
-            const oldDirectoryContextMenu = JournalDirectory.prototype._getEntryContextOptions;
-            JournalDirectory.prototype._getEntryContextOptions = function (event) {
-                return onDirectoryContextMenu.call(this, oldDirectoryContextMenu.bind(this), ...arguments);
-            }
+        // Use direct monkey patching to avoid libWrapper's global access during path resolution
+        const oldDirectoryContextMenu = JournalDirectoryImpl.prototype._getEntryContextOptions;
+        JournalDirectoryImpl.prototype._getEntryContextOptions = function () {
+            return onDirectoryContextMenu.call(this, oldDirectoryContextMenu.bind(this), ...arguments);
         }
 
         let journalSheetDrop = async function (wrapped, ...args) {
@@ -1584,7 +1621,8 @@ export class MonksEnhancedJournal {
             if (!this._canDragDrop()) return;
 
             // Retrieve the dropped Journal Entry Page
-            const data = TextEditor.getDragEventData(event);
+            const TextEditorImpl = foundry.applications.ux.TextEditor.implementation;
+            const data = TextEditorImpl.getDragEventData(event);
             if (data.type == "JournalEntry") {
                 const entry = await JournalEntry.implementation.fromDropData(data);
 
@@ -1621,68 +1659,64 @@ export class MonksEnhancedJournal {
         }
 
         if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "JournalSheet.prototype._onDrop", journalSheetDrop, "WRAPPER");
+            libWrapper.register("monks-enhanced-journal", "foundry.appv1.sheets.JournalSheet.prototype._onDrop", journalSheetDrop, "WRAPPER");
         } else {
-            const oldDrop = JournalSheet.prototype._onDrop;
-            JournalSheet.prototype._onDrop = function (event) {
+            const JournalSheetImpl = foundry.appv1.sheets.JournalSheet;
+            const oldDrop = JournalSheetImpl.prototype._onDrop;
+            JournalSheetImpl.prototype._onDrop = function (event) {
                 return journalSheetDrop.call(this, oldDrop.bind(this), ...arguments);
             }
         }
 
-        let onChatDrop = async function (wrapped, ...args) {
-            let [event] = args;
-
-            let data;
-            try {
-                data = JSON.parse(event.dataTransfer.getData('text/plain'));
-            }
-            catch (err) {
-                return false;
-            }
-
-            if (data.type == "JournalTab") {
-                let page = await fromUuid(data.uuid);
-
-                let chatData = {
-                    title: page.name,
-                    src: page.src,
-                    uuid: data.uuid
-                };
-
-                const ownership = page.parent.ownership;
-
-                //create a chat message
-                let whisper = null;
-                if (ownership.default < CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED) {
-                    whisper = ChatMessage.getWhisperRecipients("GM").map(u => u.id);
-                    for (let [userId, permission] of Object.entries(ownership)) {
-                        if (permission >= CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED)
-                            whisper.push(userId);
-                    }
-                    whisper = whisper.filter((value, index, array) => array.indexOf(value) === index);
+        // Patch ChatLog._onDrop to handle dragging journal tabs to chat
+        const ChatLogImpl = foundry.applications.sidebar.tabs.ChatLog || ChatLog;
+        if (ChatLogImpl?.prototype?._onDrop) {
+            const oldChatDrop = ChatLogImpl.prototype._onDrop;
+            ChatLogImpl.prototype._onDrop = async function (event) {
+                let data;
+                try {
+                    data = JSON.parse(event.dataTransfer.getData('text/plain'));
                 }
-                let content = await renderTemplate("modules/monks-enhanced-journal/templates/journal-chat.html", chatData);
-                let messageData = {
-                    user: game.user.id,
-                    speaker: null,
-                    style: CONST.CHAT_MESSAGE_STYLES.OTHER,
-                    content: content,
-                    whisper: whisper,
-                    flags: { "journal-chat-card": true }
-                };
+                catch (err) {
+                    return oldChatDrop.call(this, event);
+                }
 
-                return ChatMessage.create(messageData, {});
-            }
+                if (data.type == "JournalTab") {
+                    let page = await fromUuid(data.uuid);
 
-            return wrapped(...args);
-        }
+                    let chatData = {
+                        title: page.name,
+                        src: page.src,
+                        uuid: data.uuid
+                    };
 
-        if (game.modules.get("lib-wrapper")?.active) {
-            libWrapper.register("monks-enhanced-journal", "ChatLog.prototype.constructor._onDropTextAreaData", onChatDrop, "MIXED");
-        } else {
-            const oldChatDrop = ChatLog.prototype.constructor._onDropTextAreaData;
-            ChatLog.prototype.constructor._onDropTextAreaData = function (event) {
-                return onChatDrop.call(this, oldChatDrop.bind(this), ...arguments);
+                    const ownership = page.parent.ownership;
+
+                    //create a chat message
+                    let whisper = null;
+                    if (ownership.default < CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED) {
+                        whisper = ChatMessage.getWhisperRecipients("GM").map(u => u.id);
+                        for (let [userId, permission] of Object.entries(ownership)) {
+                            if (permission >= CONST.DOCUMENT_OWNERSHIP_LEVELS.LIMITED)
+                                whisper.push(userId);
+                        }
+                        whisper = whisper.filter((value, index, array) => array.indexOf(value) === index);
+                    }
+                    const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+                    let content = await renderTemplateImpl("modules/monks-enhanced-journal/templates/journal-chat.html", chatData);
+                    let messageData = {
+                        user: game.user.id,
+                        speaker: null,
+                        style: CONST.CHAT_MESSAGE_STYLES.OTHER,
+                        content: content,
+                        whisper: whisper,
+                        flags: { "journal-chat-card": true }
+                    };
+
+                    return ChatMessage.create(messageData, {});
+                }
+
+                return oldChatDrop.call(this, event);
             }
         }
 
@@ -2097,31 +2131,34 @@ export class MonksEnhancedJournal {
 
         game.documentTypes.JournalEntryPage
 
+        const DocumentSheetConfigImpl = foundry.applications.apps.DocumentSheetConfig;
+        const JournalPageSheetImpl = foundry.appv1.sheets.JournalPageSheet;
+
         for (let [k, v] of Object.entries(labels)) {
             if (CONFIG.JournalEntryPage.sheetClasses[k] == undefined)
                 CONFIG.JournalEntryPage.sheetClasses[k] = {};
-            DocumentSheetConfig.registerSheet(JournalEntryPage, "monks-enhanced-journal", types[k] || JournalPageSheet, {
+            DocumentSheetConfigImpl.registerSheet(JournalEntryPage, "monks-enhanced-journal", types[k] || JournalPageSheetImpl, {
                 types: [k],
                 makeDefault: true,
                 label: i18n(v)
             });
         }
-        DocumentSheetConfig.registerSheet(JournalEntryPage, "monks-enhanced-journal", TextImageEntrySheet, {
+        DocumentSheetConfigImpl.registerSheet(JournalEntryPage, "monks-enhanced-journal", TextImageEntrySheet, {
             types: ["journalentry"],
             makeDefault: false,
             label: "Text and Image"
         });
-        DocumentSheetConfig.registerSheet(JournalEntryPage, "monks-enhanced-journal", CheckListSheet, {
+        DocumentSheetConfigImpl.registerSheet(JournalEntryPage, "monks-enhanced-journal", CheckListSheet, {
             types: ["list"],
             makeDefault: false,
             label: "Checklist"
         });
-        DocumentSheetConfig.registerSheet(JournalEntryPage, "monks-enhanced-journal", PollListSheet, {
+        DocumentSheetConfigImpl.registerSheet(JournalEntryPage, "monks-enhanced-journal", PollListSheet, {
             types: ["list"],
             makeDefault: false,
             label: "Poll"
         });
-        DocumentSheetConfig.registerSheet(JournalEntryPage, "monks-enhanced-journal", ProgressListSheet, {
+        DocumentSheetConfigImpl.registerSheet(JournalEntryPage, "monks-enhanced-journal", ProgressListSheet, {
             types: ["list"],
             makeDefault: false,
             label: "Progress"
@@ -2653,18 +2690,35 @@ export class MonksEnhancedJournal {
         }
         */
         if (!game.modules.get('monks-combat-details')?.active) {
-            patchFunc("Draggable.prototype._onDragMouseUp", async function (wrapped, ...args) {
-                try {
-                    if (this.app.constructor._getInheritanceChain) {
-                        for (const cls of this.app.constructor._getInheritanceChain()) {
-                            Hooks.callAll(`dragEnd${cls.name}`, this.app, this.app.position);
+            const DraggableImpl = foundry.applications.ux.Draggable.implementation;
+            if (game.modules.get("lib-wrapper")?.active) {
+                libWrapper.register("monks-enhanced-journal", "foundry.applications.ux.Draggable.implementation.prototype._onDragMouseUp", async function (wrapped, ...args) {
+                    try {
+                        if (this.app.constructor._getInheritanceChain) {
+                            for (const cls of this.app.constructor._getInheritanceChain()) {
+                                Hooks.callAll(`dragEnd${cls.name}`, this.app, this.app.position);
+                            }
+                        } else {
+                            Hooks.callAll(`dragEnd${this.app.constructor.name}`, this.app, this.app.position);
                         }
-                    } else {
-                        Hooks.callAll(`dragEnd${this.app.constructor.name}`, this.app, this.app.position);
-                    }
-                } catch (e) { }
-                return wrapped(...args);
-            });
+                    } catch (e) { }
+                    return wrapped(...args);
+                }, "WRAPPER");
+            } else {
+                const oldDragMouseUp = DraggableImpl.prototype._onDragMouseUp;
+                DraggableImpl.prototype._onDragMouseUp = async function(...args) {
+                    try {
+                        if (this.app.constructor._getInheritanceChain) {
+                            for (const cls of this.app.constructor._getInheritanceChain()) {
+                                Hooks.callAll(`dragEnd${cls.name}`, this.app, this.app.position);
+                            }
+                        } else {
+                            Hooks.callAll(`dragEnd${this.app.constructor.name}`, this.app, this.app.position);
+                        }
+                    } catch (e) { }
+                    return oldDragMouseUp.call(this, ...args);
+                };
+            }
         }
     }
 
@@ -3054,7 +3108,9 @@ export class MonksEnhancedJournal {
     }
 
     static refreshObjectives(resize = false) {
-        let showObjectives = ((ui.controls.activeControl == 'notes' || setting('objectives-always')) && setting('show-objectives') && setting('show-dialog'));
+        // v13: activeControl is deprecated, use control.name instead
+        const activeControl = ui.controls.control?.name || ui.controls.activeControl;
+        let showObjectives = ((activeControl == 'notes' || setting('objectives-always')) && setting('show-objectives') && setting('show-dialog'));
         if (showObjectives) {
             if (!MonksEnhancedJournal.objdisp)
                 MonksEnhancedJournal.objdisp = new ObjectiveDisplay();
@@ -4559,20 +4615,22 @@ Hooks.on("preDocumentSheetRegistrarInit", (settings) => {
     settings["JournalEntry"] = true;
 });
 
-Hooks.on("renderChatMessage", (message, html, data) => {
+Hooks.on("renderChatMessageHTML", (message, html, data) => {
+    // v13: html is now HTMLElement instead of jQuery object
+    const $html = html instanceof HTMLElement ? $(html) : html;
     if (message.flags['monks-enhanced-journal']) {
         if (!game.user.isGM)
-            html.find(".gm-only").remove();
+            $html.find(".gm-only").remove();
         if (game.user.isGM)
-            html.find(".player-only").hide();
+            $html.find(".player-only").hide();
 
-        $('.request-accept', html).click(MonksEnhancedJournal.acceptItem.bind(message, 'accept'));
-        $('.request-reject', html).click(MonksEnhancedJournal.acceptItem.bind(message, game.user.isGM ? 'reject' : 'cancel'));
+        $('.request-accept', $html).click(MonksEnhancedJournal.acceptItem.bind(message, 'accept'));
+        $('.request-reject', $html).click(MonksEnhancedJournal.acceptItem.bind(message, game.user.isGM ? 'reject' : 'cancel'));
         if (message.getFlag('monks-enhanced-journal', 'action') == "sell") {
             let offered = message.getFlag('monks-enhanced-journal', 'offered');
             let approved = message.getFlag('monks-enhanced-journal', 'approved');
 
-            $('.request-accept', html).toggleClass('active', (game.user.isGM ? !!offered : !!approved)).prop('disabled', !game.user.isGM && !offered);
+            $('.request-accept', $html).toggleClass('active', (game.user.isGM ? !!offered : !!approved)).prop('disabled', !game.user.isGM && !offered);
         }
 
         $('input[name="flags.monks-enhanced-journal.quantity"]', html).change(MonksEnhancedJournal.updateSale.bind(message));
@@ -4649,33 +4707,40 @@ Hooks.on('getJournalSheetHeaderButtons', (app, actions) => {
 });
 
 Hooks.on("getSceneControlButtons", (controls) => {
+    // v13: controls is now an object keyed by control name, tools is also an object
     if (setting('show-objectives')) {
-        let noteControls = controls.find(control => control.name === "notes")
-        noteControls.tools.push({
-            name: "toggledialog",
-            title: "MonksEnhancedJournal.toggledialog",
-            icon: "fas fa-calendar-day",
-            toggle: true,
-            active: setting('show-dialog'),
-            onClick: toggled => {
-                game.settings.set('monks-enhanced-journal', 'show-dialog', toggled);
-                MonksEnhancedJournal.refreshObjectives();
-            }
-        });
+        const noteControls = controls.notes;
+        if (noteControls?.tools) {
+            noteControls.tools.toggledialog = {
+                name: "toggledialog",
+                title: "MonksEnhancedJournal.toggledialog",
+                icon: "fas fa-calendar-day",
+                toggle: true,
+                active: setting('show-dialog'),
+                order: Object.keys(noteControls.tools).length,
+                onClick: toggled => {
+                    game.settings.set('monks-enhanced-journal', 'show-dialog', toggled);
+                    MonksEnhancedJournal.refreshObjectives();
+                }
+            };
+        }
     }
 
     if (setting("show-chatbubble")) {
-        let tokenControls = controls.find(control => control.name === "token")
-        tokenControls.tools.push({
-            name: "tokendialog",
-            title: "Toggle Token Dialog Chat Bubbles",
-            icon: "fas fa-comment",
-            toggle: true,
-            active: setting('show-chat-bubbles'),
-            onClick: toggled => {
-                game.settings.set('monks-enhanced-journal', 'show-chat-bubbles', toggled);
-            }
-        });
+        const tokenControls = controls.token;
+        if (tokenControls?.tools) {
+            tokenControls.tools.tokendialog = {
+                name: "tokendialog",
+                title: "Toggle Token Dialog Chat Bubbles",
+                icon: "fas fa-comment",
+                toggle: true,
+                active: setting('show-chat-bubbles'),
+                order: Object.keys(tokenControls.tools).length,
+                onClick: toggled => {
+                    game.settings.set('monks-enhanced-journal', 'show-chat-bubbles', toggled);
+                }
+            };
+        }
     }
 });
 

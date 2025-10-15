@@ -762,13 +762,14 @@ export class SlideshowSheet extends EnhancedJournalSheet {
                 callback: elem => {
                     let li = $(elem).closest('.slide');
                     const id = li.data("slideId");
+                    const element = li instanceof HTMLElement ? li : (li?.[0] || li);
                     //const slide = this.object.flags["monks-enhanced-journal"].slides.get(li.data("entityId"));
                     Dialog.confirm({
                         title: `${game.i18n.localize("SIDEBAR.Delete")} slide`,
                         content: game.i18n.format("SIDEBAR.DeleteWarning", { type: 'slide' }),
                         yes: this.deleteSlide.bind(this, id),
                         options: {
-                            top: Math.min(li[0].offsetTop, window.innerHeight - 350),
+                            top: Math.min(element?.offsetTop || 0, window.innerHeight - 350),
                             left: window.innerWidth - 720
                         }
                     });

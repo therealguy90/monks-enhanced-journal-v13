@@ -1,10 +1,10 @@
 import { MonksEnhancedJournal, log, setting, i18n, makeid, quantityname } from '../monks-enhanced-journal.js';
 import { getValue, setValue } from "../helpers.js";
 
-export class MakeOffering extends FormApplication {
+export class MakeOffering extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
     constructor(object, journalsheet, options = {}) {
-        super(object, options);
-
+        super(options);
+        this.object = object;
         this.journalsheet = journalsheet;
         this.offering = foundry.utils.mergeObject({
             currency: {},
@@ -20,23 +20,41 @@ export class MakeOffering extends FormApplication {
         }
     }
 
-    /** @override */
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "make-offering",
-            classes: ["form", "make-offering", "monks-journal-sheet", "dialog"],
-            title: i18n("MonksEnhancedJournal.MakeOffering"),
-            template: "modules/monks-enhanced-journal/templates/make-offering.html",
-            dragDrop: [
-                { dropSelector: ".make-offer-container" }
-            ],
+    static DEFAULT_OPTIONS = {
+        id: "make-offering",
+        classes: ["make-offering", "monks-journal-sheet", "dialog"],
+        tag: "form",
+        form: {
+            handler: MakeOffering.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
             width: 600,
-            height: 'auto'
-        });
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.MakeOffering",
+            contentClasses: ["standard-form"]
+        },
+        actions: {
+            "actor-open": MakeOffering.openActor,
+            "remove": MakeOffering.removeOffering,
+            "cancel": MakeOffering.cancel
+        }
+    };
+
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/make-offering.hbs"
+        }
+    };
+
+    get dragDrop() {
+        return [{ dropSelector: ".make-offer-container" }];
     }
 
-    getData(options) {
-        let data = super.getData(options);
+    _prepareContext(options) {
+        let data = super._prepareContext(options);
 
         data.private = this.offering.hidden;
 
@@ -71,8 +89,6 @@ export class MakeOffering extends FormApplication {
 
         return data;
     }
-
-    /* -------------------------------------------- */
 
     _canDragDrop() {
         return true;
@@ -132,8 +148,7 @@ export class MakeOffering extends FormApplication {
         log('drop data', event, data);
     }
 
-    /** @override */
-    async _updateObject(event, formData) {
+    static async #onSubmit(event, form, formData) {
         this.offering.userid = game.user.id;
         this.offering.state = "offering";
 
@@ -147,40 +162,47 @@ export class MakeOffering extends FormApplication {
         }
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _onRender(context, options) {
+        super._onRender(context, options);
 
-        $('.actor-icon', html).on("dblclick", this.openActor.bind(this));
-        $('.item-delete', html).on("click", this.removeOffering.bind(this));
+        const privateCheckbox = this.element.querySelector('.private');
+        if (privateCheckbox) {
+            privateCheckbox.addEventListener("change", (event) => {
+                this.offering.hidden = event.target.checked;
+            });
+        }
 
-        $('.cancel-offer', html).on("click", this.close.bind(this));
-        $('.private', html).on("change", (event) => {
-            this.offering.hidden = $(event.currentTarget).prop("checked");
-        });
-        $('.currency-field', html).on("blur", (event) => {
-            this.offering.currency[$(event.currentTarget).attr("name")] = parseInt($(event.currentTarget).val() || 0);
+        const currencyFields = this.element.querySelectorAll('.currency-field');
+        currencyFields.forEach(field => {
+            field.addEventListener("blur", (event) => {
+                this.offering.currency[event.target.getAttribute("name")] = parseInt(event.target.value || 0);
+            });
         });
     }
 
-    removeOffering(event) {
-        let that = this;
-        const id = event.currentTarget.closest(".item").dataset.id;
-        Dialog.confirm({
+    static async removeOffering(event, target) {
+        const id = target.closest(".item").dataset.id;
+        const confirmed = await Dialog.confirm({
             title: `Remove offering Item`,
-            content: "Are you sure you want to remove this item from the offering?",
-            yes: () => {
-                that.offering.items.findSplice(i => i.id == id);
-                that.render();
-            }
+            content: "Are you sure you want to remove this item from the offering?"
         });
+        
+        if (confirmed) {
+            this.offering.items.findSplice(i => i.id == id);
+            this.render();
+        }
     }
 
-    async openActor() {
+    static async openActor(event, target) {
         try {
             let actor = game.actors.get(this.offering?.actor?.id);
             if (actor) {
                 actor.sheet.render(true);
             }
         } catch {}
+    }
+
+    static cancel(event, target) {
+        this.close();
     }
 }

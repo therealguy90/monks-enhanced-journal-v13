@@ -1,49 +1,65 @@
 import { MonksEnhancedJournal, log, error, i18n, setting, makeid } from "../monks-enhanced-journal.js";
 
-export class EditCurrency extends FormApplication {
-    constructor(object, options) {
-        super(object, options);
-
+export class EditCurrency extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
+    constructor(object, options = {}) {
+        super(options);
+        this.object = object;
         this.currency = MonksEnhancedJournal.currencies;
     }
 
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "journal-editcurrency",
-            title: i18n("MonksEnhancedJournal.EditCurrency"),
-            classes: ["edit-currency"],
-            template: "./modules/monks-enhanced-journal/templates/edit-currency.html",
+    static DEFAULT_OPTIONS = {
+        id: "journal-editcurrency",
+        classes: ["edit-currency"],
+        tag: "form",
+        form: {
+            handler: EditCurrency.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
             width: 500,
-            height: "auto",
-            closeOnSubmit: true,
-            popOut: true,
-        });
-    }
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.EditCurrency",
+            contentClasses: ["standard-form"]
+        },
+        actions: {
+            add: EditCurrency.addCurrency,
+            remove: EditCurrency.removeCurrency,
+            reset: EditCurrency.resetCurrency
+        }
+    };
 
-    getData(options) {
+    static PARTS = {
+        form: {
+            template: "./modules/monks-enhanced-journal/templates/edit-currency.hbs"
+        }
+    };
+
+    _prepareContext(options) {
         return {
             currency: this.currency
         };
     }
 
-    _updateObject() {
+    static async #onSubmit(event, form, formData) {
         let data = this.currency.filter(c => !!c.id && !!c.name);
-        game.settings.set('monks-enhanced-journal', 'currency', data);
+        await game.settings.set('monks-enhanced-journal', 'currency', data);
         this.submitting = true;
     }
 
-    addCurrency(event) {
+    static addCurrency(event, target) {
         this.currency.push({ id: "", name: "", convert: 1 });
         this.refresh();
     }
 
     changeData(event) {
         let currid = event.currentTarget.closest('li.item').dataset.id;
-        let prop = $(event.currentTarget).attr("name");
+        let prop = event.currentTarget.getAttribute("name");
 
         let currency = this.currency.find(c => c.id == currid);
         if (currency) {
-            let val = $(event.currentTarget).val();
+            let val = event.currentTarget.value;
             if (prop == "convert") {
                 if (isNaN(val))
                     val = 1;
@@ -52,25 +68,25 @@ export class EditCurrency extends FormApplication {
             }
             else if (prop == "id") {
                 val = val.replace(/[^a-z]\-/gi, '');
-                $(event.currentTarget).val(val);
+                event.currentTarget.value = val;
                 if (!!this.currency.find(c => c.id == val)) {
-                    $(event.currentTarget).val(currid)
+                    event.currentTarget.value = currid;
                     return;
                 }
-                $(event.currentTarget.closest('li.item')).attr("data-id", val);
+                event.currentTarget.closest('li.item').setAttribute("data-id", val);
             }
 
             currency[prop] = val;
         }
     }
 
-    removeCurrency(event) {
-        let currid = event.currentTarget.closest('li.item').dataset.id;
+    static removeCurrency(event, target) {
+        let currid = target.closest('li.item').dataset.id;
         this.currency.findSplice(s => s.id === currid);
         this.refresh();
     }
 
-    resetCurrency() {
+    static resetCurrency(event, target) {
         this.currency = MonksEnhancedJournal.defaultCurrencies;
         this.refresh();
     }
@@ -81,15 +97,12 @@ export class EditCurrency extends FormApplication {
         window.setTimeout(function () { that.setPosition(); }, 500);
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _onRender(context, options) {
+        super._onRender(context, options);
 
-        $('button[name="submit"]', html).click(this._onSubmit.bind(this));
-        $('button[name="reset"]', html).click(this.resetCurrency.bind(this));
-
-        $('input[name]', html).change(this.changeData.bind(this));
-
-        $('.item-delete', html).click(this.removeCurrency.bind(this));
-        $('.item-add', html).click(this.addCurrency.bind(this));
-    };
+        const inputs = this.element.querySelectorAll('input[name]');
+        inputs.forEach(input => {
+            input.addEventListener('change', this.changeData.bind(this));
+        });
+    }
 }

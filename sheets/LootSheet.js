@@ -4,6 +4,9 @@ import { DistributeCurrency } from "../apps/distribute-currency.js";
 import { TransferCurrency } from "../apps/transfer-currency.js";
 import { getValue, setValue, MEJHelpers } from "../helpers.js";
 
+// V13 Namespaced class references
+const ContextMenuImpl = foundry.applications.ux.ContextMenu.implementation;
+
 export class LootSheet extends EnhancedJournalSheet {
     constructor(data, options) {
         super(data, options);
@@ -131,7 +134,7 @@ export class LootSheet extends EnhancedJournalSheet {
         $('.configure-permissions', html).click(this.configure.bind(this));
 
         const actorOptions = this._getActorContextOptions();
-        if (actorOptions) new ContextMenu($(html), ".loot-character", actorOptions);
+        if (actorOptions) new ContextMenuImpl(html[0], ".loot-character", actorOptions, { jQuery: false });
     }
 
     configure() {

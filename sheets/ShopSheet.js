@@ -665,7 +665,8 @@ export class ShopSheet extends EnhancedJournalSheet {
         if (!whisper.find(u => u == game.user.id))
             whisper.push(game.user.id);
         let speaker = ChatMessage.getSpeaker();
-        let content = await renderTemplate("./modules/monks-enhanced-journal/templates/request-sale.html", messageContent);
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        let content = await renderTemplateImpl("./modules/monks-enhanced-journal/templates/request-sale.html", messageContent);
         let messageData = {
             user: game.user.id,
             speaker: speaker,

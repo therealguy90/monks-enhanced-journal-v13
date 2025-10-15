@@ -315,7 +315,8 @@ export class ListSheet extends EnhancedJournalSheet {
         const title = label + (data.id && options.type == 'folder' ? ' : ' + data.name : '');
 
         // Render the entity creation form
-        const html = await renderTemplate(`modules/monks-enhanced-journal/templates/sheets/list${options.type}.html`, {
+        const renderTemplateImpl = foundry.applications.handlebars.renderTemplate;
+        const html = await renderTemplateImpl(`modules/monks-enhanced-journal/templates/sheets/list${options.type}.html`, {
             data: data,
             name: data.name || game.i18n.format("DOCUMENT.New", { type: options.type }),
             folder: data.folder,
@@ -592,12 +593,13 @@ export class ListSheet extends EnhancedJournalSheet {
                 callback: header => {
                     const li = header.parent();
                     const folder = that.folders.find(f => f.id == li.data("folderId"));
+                    const element = li instanceof HTMLElement ? li : (li?.[0] || li);
                     return Dialog.confirm({
                         title: `${game.i18n.localize("FOLDER.Remove")} ${folder?.data?.name}`,
                         content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.localize("FOLDER.RemoveWarning")}</p>`,
                         yes: () => that._deleteFolder(folder, { deleteSubfolders: false, deleteContents: false }),
                         options: {
-                            top: Math.min(li[0].offsetTop, window.innerHeight - 350),
+                            top: Math.min(element?.offsetTop || 0, window.innerHeight - 350),
                             left: window.innerWidth - 720,
                             width: 400
                         }
@@ -611,12 +613,13 @@ export class ListSheet extends EnhancedJournalSheet {
                 callback: header => {
                     const li = header.parent();
                     const folder = that.folders.find(f => f.id == li.data("folderId"));
+                    const element = li instanceof HTMLElement ? li : (li?.[0] || li);
                     return Dialog.confirm({
                         title: `${game.i18n.localize("FOLDER.Delete")} ${folder?.data?.name}`,
                         content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.localize("FOLDER.DeleteWarning")}</p>`,
                         yes: () => that._deleteFolder(folder, { deleteSubfolders: true, deleteContents: true }),
                         options: {
-                            top: Math.min(li[0].offsetTop, window.innerHeight - 350),
+                            top: Math.min(element?.offsetTop || 0, window.innerHeight - 350),
                             left: window.innerWidth - 720,
                             width: 400
                         }
@@ -628,13 +631,17 @@ export class ListSheet extends EnhancedJournalSheet {
 
     _getEntryContextOptions() {
         let that = this;
+        // v13: Helper to get element from either jQuery object or native element
+        const getElement = (li) => li instanceof HTMLElement ? li : (li?.[0] || li);
+        const getDocumentId = (li) => getElement(li)?.dataset?.documentId;
+
         return [
             {
                 name: i18n("MonksEnhancedJournal.EditItem"),
                 icon: '<i class="fas fa-edit"></i>',
                 condition: game.user.isGM || this.object.isOwner,
                 callback: async (li) => {
-                    const item = that.items.find(i => i.id == li[0].dataset.documentId);
+                    const item = that.items.find(i => i.id == getDocumentId(li));
                     if (!item) return;
 
                     new ListEdit(item, that).render(true);
@@ -645,8 +652,9 @@ export class ListSheet extends EnhancedJournalSheet {
                 icon: '<i class="fas fa-trash"></i>',
                 condition: () => game.user.isGM || this.object.isOwner,
                 callback: li => {
-                    const item = that.items.find(i => i.id == li[0].dataset.documentId);
+                    const item = that.items.find(i => i.id == getDocumentId(li));
                     if (!item) return;
+                    const element = getElement(li);
                     return Dialog.confirm({
                         title: i18n("MonksEnhancedJournal.DeleteItem"),
                         content: `<h4>${game.i18n.localize("AreYouSure")}</h4><p>${game.i18n.format("SIDEBAR.DeleteWarning", { type: "List Item" })}</p>`,
@@ -656,7 +664,7 @@ export class ListSheet extends EnhancedJournalSheet {
                             that.object.setFlag('monks-enhanced-journal', 'items', items);
                         },
                         options: {
-                            top: Math.min(li[0].offsetTop, window.innerHeight - 350),
+                            top: Math.min(element?.offsetTop || 0, window.innerHeight - 350),
                             left: window.innerWidth - 720,
                             width: 400
                         }
@@ -682,7 +690,8 @@ export class ListSheet extends EnhancedJournalSheet {
                 condition: () => game.user.isGM,
                 callback: li => {
                     let items = (that.object.flags['monks-enhanced-journal'].items || []);
-                    const document = items.find(i => i.id == li.data("documentId"));
+                    const element = li instanceof HTMLElement ? li : (li?.[0] || li);
+                    const document = items.find(i => i.id == (element?.dataset?.documentId || li.data("documentId")));
                     document.ownership = document.ownership || { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER };
                     document.apps = [];
                     document.uuid = document.id;
@@ -691,7 +700,7 @@ export class ListSheet extends EnhancedJournalSheet {
                         return;
                     }
                     let docOwnership = new DocumentOwnershipConfig(document, {
-                        top: Math.min(li[0].offsetTop, window.innerHeight - 350),
+                        top: Math.min(element?.offsetTop || 0, window.innerHeight - 350),
                         left: window.innerWidth - 720
                     })
 

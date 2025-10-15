@@ -1,31 +1,44 @@
 import { MonksEnhancedJournal, log, setting, i18n } from '../monks-enhanced-journal.js';
 
-export class SlideshowWindow extends FormApplication {
+export class SlideshowWindow extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
     constructor(object, options = {}) {
-        super(object, options);
+        super(options);
+        this.object = object;
     }
 
-    /** @override */
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "slideshow-display",
-            classes: ["sheet"],
-            title: ".",
-            template: "modules/monks-enhanced-journal/templates/sheets/slideshow-display.html",
-            width: ($('body').width() * 0.75),
-            height: ($('body').height() * 0.75),
-            left: ($('body').width() * 0.125),
-            top: ($('body').height() * 0.125),
-            resizable: true,
-            minimizable: false,
-            editable: false,
+    static DEFAULT_OPTIONS = {
+        id: "slideshow-display",
+        classes: ["sheet"],
+        tag: "form",
+        form: {
+            handler: SlideshowWindow.#onSubmit,
             closeOnSubmit: false,
             submitOnChange: false,
-            submitOnClose: false,
-        });
-    }
+            submitOnClose: false
+        },
+        position: {
+            width: window.innerWidth * 0.75,
+            height: window.innerHeight * 0.75
+        },
+        window: {
+            title: ".",
+            resizable: true,
+            minimizable: false,
+            contentClasses: []
+        }
+    };
+
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/sheets/slideshow-display.hbs"
+        }
+    };
 
     get title() {
         return this.object.name;
+    }
+
+    static async #onSubmit(event, form, formData) {
+        // No submission logic needed for display window
     }
 }

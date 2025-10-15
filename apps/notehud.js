@@ -1,6 +1,8 @@
 import { log, setting, i18n, MonksEnhancedJournal } from '../monks-enhanced-journal.js';
 
-export class NoteHUD extends BasePlaceableHUD {
+const BasePlaceableHUDImpl = foundry.applications.hud.BasePlaceableHUD;
+
+export class NoteHUD extends BasePlaceableHUDImpl {
     /** @override */
     static get defaultOptions() {
         return foundry.utils.mergeObject(super.defaultOptions, {

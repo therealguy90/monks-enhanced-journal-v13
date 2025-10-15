@@ -1,9 +1,11 @@
 import { MonksEnhancedJournal } from "../monks-enhanced-journal.js";
 
+const MeasuredTemplateImpl = foundry.canvas.placeables.MeasuredTemplate;
+
 /**
  * A helper class for building MeasuredTemplates for deploying an Encounter
  */
-export class EncounterTemplate extends MeasuredTemplate {
+export class EncounterTemplate extends MeasuredTemplateImpl {
 
     /**
      * Track the timestamp when the last mouse move event was captured.

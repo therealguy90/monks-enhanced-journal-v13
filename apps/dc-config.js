@@ -1,21 +1,36 @@
 import { MonksEnhancedJournal, log, setting, i18n, makeid } from '../monks-enhanced-journal.js';
 
-export class DCConfig extends FormApplication {
+export class DCConfig extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
     constructor(object, journalentry, options = {}) {
-        super(object, options);
+        super(options);
+        this.object = object;
         this.journalentry = journalentry;
     }
 
     /** @override */
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "dc-config",
-            classes: ["form", "dc-sheet"],
-            title: i18n("MonksEnhancedJournal.DCConfiguration"),
-            template: "modules/monks-enhanced-journal/templates/dc-config.html",
-            width: 400
-        });
-    }
+    static DEFAULT_OPTIONS = {
+        id: "dc-config",
+        classes: ["form", "dc-sheet"],
+        tag: "form",
+        form: {
+            handler: DCConfig.#onSubmit,
+            closeOnSubmit: true
+        },
+        position: {
+            width: 400,
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.DCConfiguration",
+            contentClasses: ["standard-form"]
+        }
+    };
+
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/dc-config.hbs"
+        }
+    };
 
     static optionList() {
         let config = CONFIG[game.system.id.toUpperCase()] || {};
@@ -45,8 +60,8 @@ export class DCConfig extends FormApplication {
         return attributeOptions;
     }
 
-    getData(options) {
-        return foundry.utils.mergeObject(super.getData(options),
+    _prepareContext(options) {
+        return foundry.utils.mergeObject(super._prepareContext(options),
             {
                 attributeOptions: DCConfig.optionList()
             }, { recursive: false }
@@ -56,10 +71,10 @@ export class DCConfig extends FormApplication {
     /* -------------------------------------------- */
 
     /** @override */
-    async _updateObject(event, formData) {
+    static async #onSubmit(event, form, formData) {
         log('updating dc', event, formData, this.object);
 
-        foundry.utils.mergeObject(this.object, formData);
+        foundry.utils.mergeObject(this.object, formData.object);
         let dcs = foundry.utils.duplicate(this.journalentry.object.flags["monks-enhanced-journal"].dcs || []);
         if (this.object.id == undefined) {
             this.object.id = makeid();
@@ -69,8 +84,8 @@ export class DCConfig extends FormApplication {
         this.journalentry.object.setFlag('monks-enhanced-journal', 'dcs', dcs);
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _onRender(context, options) {
+        super._onRender(context, options);
     }
 
     async close(options) {

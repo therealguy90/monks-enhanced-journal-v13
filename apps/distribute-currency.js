@@ -1,6 +1,6 @@
 import { MonksEnhancedJournal, log, setting, i18n } from '../monks-enhanced-journal.js';
 
-export class DistributeCurrency extends FormApplication {
+export class DistributeCurrency extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
     original = {};
     characters = [];
     currency = {};
@@ -33,22 +33,38 @@ export class DistributeCurrency extends FormApplication {
     }
 
     /** @override */
-    static get defaultOptions() {
-        return foundry.utils.mergeObject(super.defaultOptions, {
-            id: "distribute-currency",
-            classes: ["distribute-currency", "monks-journal-sheet", "dialog"],
-            title: i18n("MonksEnhancedJournal.DistributeCurrency"),
-            template: "modules/monks-enhanced-journal/templates/distribute-currency.html",
-            width: 600,
-            height: 'auto',
+    static DEFAULT_OPTIONS = {
+        id: "distribute-currency",
+        classes: ["distribute-currency", "monks-journal-sheet", "dialog"],
+        tag: "form",
+        form: {
+            handler: DistributeCurrency.#onSubmit,
             closeOnSubmit: true,
-            submitOnClose: false,
             submitOnChange: false
-        });
-    }
+        },
+        position: {
+            width: 600,
+            height: "auto"
+        },
+        window: {
+            title: "MonksEnhancedJournal.DistributeCurrency",
+            contentClasses: ["standard-form"]
+        },
+        actions: {
+            split: DistributeCurrency.splitCurrency,
+            reset: DistributeCurrency.resetData,
+            assign: DistributeCurrency.assignCurrency
+        }
+    };
 
-    getData(options) {
-        return foundry.utils.mergeObject(super.getData(options),
+    static PARTS = {
+        form: {
+            template: "modules/monks-enhanced-journal/templates/distribute-currency.hbs"
+        }
+    };
+
+    _prepareContext(options) {
+        return foundry.utils.mergeObject(super._prepareContext(options),
             {
                 characters: this.characters,
                 currencies: this.currencies,
@@ -72,7 +88,7 @@ export class DistributeCurrency extends FormApplication {
         }
     }
 
-    resetData() {
+    static resetData(event, target) {
         this.currency = foundry.utils.duplicate(this.original);
         for (let character of this.characters) {
             for (let curr of Object.keys(character.currency)) {
@@ -90,10 +106,10 @@ export class DistributeCurrency extends FormApplication {
         let charId = event.currentTarget.dataset.character;
 
         if (charId == undefined)
-            this.currency[curr] = parseInt($(event.currentTarget).val() || 0);
+            this.currency[curr] = parseInt(event.currentTarget.value || 0);
         else {
             let character = this.characters.find(c => c.id == charId);
-            let value = $(event.currentTarget).val();
+            let value = event.currentTarget.value;
             if (value === "")
                 character.currency[curr] = "";
             else
@@ -105,7 +121,7 @@ export class DistributeCurrency extends FormApplication {
         this.render(true);
     }
 
-    splitCurrency(event) {
+    static splitCurrency(event, target) {
         for (let curr of Object.keys(this.currency)) {
             if (this.currency[curr] == 0)
                 continue;
@@ -139,8 +155,8 @@ export class DistributeCurrency extends FormApplication {
         this.render(true);
     }
 
-    assignCurrency(event) {
-        let charId = event.currentTarget.dataset.character;
+    static assignCurrency(event, target) {
+        let charId = target.dataset.character;
 
         let character = this.characters.find(c => c.id == charId);
         for (let curr of Object.keys(this.totals)) {
@@ -153,18 +169,21 @@ export class DistributeCurrency extends FormApplication {
         this.render(true);
     }
 
-    activateListeners(html) {
-        super.activateListeners(html);
+    _onRender(context, options) {
+        super._onRender(context, options);
 
-        html.find('input.player-amount').change(this.updateAmount.bind(this));
-        html.find('input.currency-amount').change(this.updateAmount.bind(this));
-
-        html.find('a.split').click(this.splitCurrency.bind(this));
-        html.find('a.reset').click(this.resetData.bind(this));
-        html.find('a.assign').click(this.assignCurrency.bind(this));
+        const playerAmounts = this.element.querySelectorAll('input.player-amount');
+        const currencyAmounts = this.element.querySelectorAll('input.currency-amount');
+        
+        playerAmounts.forEach(input => {
+            input.addEventListener('change', this.updateAmount.bind(this));
+        });
+        currencyAmounts.forEach(input => {
+            input.addEventListener('change', this.updateAmount.bind(this));
+        });
     }
 
-    _updateObject() {
+    static async #onSubmit(event, form, formData) {
         this.loot.doSplitMoney(this.characters, this.currency);
     }
 }

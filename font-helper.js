@@ -1,6 +1,7 @@
 export class MEJFontHelper {
     static loadFonts() {
-        FontConfig.loadFont('Anglo Text', {
+        const FontConfigImpl = foundry.applications.settings.menus.FontConfig;
+        FontConfigImpl.loadFont('Anglo Text', {
             editor: true,
             fonts: [
                 {
@@ -11,7 +12,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('Bookinsanity', {
+        FontConfigImpl.loadFont('Bookinsanity', {
             editor: true,
             fonts: [
                 {
@@ -41,7 +42,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('DungeonDropCase', {
+        FontConfigImpl.loadFont('DungeonDropCase', {
             editor: true,
             fonts: [
                 {
@@ -52,7 +53,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('Lovers Quarrel', {
+        FontConfigImpl.loadFont('Lovers Quarrel', {
             editor: true,
             fonts: [
                 {
@@ -63,7 +64,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('Montserrat', {
+        FontConfigImpl.loadFont('Montserrat', {
             editor: true,
             fonts: [
                 {
@@ -74,7 +75,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('MrEaves', {
+        FontConfigImpl.loadFont('MrEaves', {
             editor: true,
             fonts: [
                 {
@@ -85,7 +86,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('Play', {
+        FontConfigImpl.loadFont('Play', {
             editor: true,
             fonts: [
                 {
@@ -96,7 +97,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('ScalySans', {
+        FontConfigImpl.loadFont('ScalySans', {
             editor: true,
             fonts: [
                 {
@@ -126,7 +127,7 @@ export class MEJFontHelper {
             ],
         });
 
-        FontConfig.loadFont('ScalySansCaps', {
+        FontConfigImpl.loadFont('ScalySansCaps', {
             editor: true,
             fonts: [
                 {
